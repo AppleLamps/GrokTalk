@@ -104,8 +104,12 @@ const ChatInterface: React.FC = () => {
                     />
                   </div>
                   
-                  <div className="flex-1 flex flex-col h-full transition-margin duration-300 ease-in-out">
-                    <ChatHeader toggleSidebar={toggleSidebar} />
+                  {/* FIX: Add fixed positioning to the header and ensure it has a higher z-index */}
+                  <div className="flex-1 flex flex-col h-full">
+                    {/* Increase z-index to ensure header is visible and add sticky positioning */}
+                    <div className="sticky top-0 z-50">
+                      <ChatHeader toggleSidebar={toggleSidebar} />
+                    </div>
                     <ChatMessages />
                     <ChatControls />
                   </div>
@@ -150,4 +154,4 @@ const ChatInterface: React.FC = () => {
 };
 
 // Make sure to export as default for compatibility with existing imports
-export default ChatInterface; 
+export default ChatInterface;
