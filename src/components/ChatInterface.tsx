@@ -81,11 +81,12 @@ const ChatInterface: React.FC = () => {
               {isMobile ? (
                 // Mobile layout - sidebar is fixed position and overlays
                 <>
+                  {/* Backdrop overlay (z-60) - higher than header but lower than sidebar */}
                   <div className={cn(
-                    "fixed inset-0 z-30 bg-black/50 transition-opacity duration-300 ease-in-out", 
+                    "fixed inset-0 z-60 bg-black/50 transition-opacity duration-300 ease-in-out", 
                     sidebarVisible ? "opacity-100" : "opacity-0 pointer-events-none",
                   )}>
-                    {/* Backdrop overlay - clicks outside sidebar close it */}
+                    {/* Clicks outside sidebar close it */}
                     <div 
                       className="absolute inset-0" 
                       onClick={toggleSidebar}
@@ -93,8 +94,9 @@ const ChatInterface: React.FC = () => {
                     ></div>
                   </div>
                   
+                  {/* Sidebar (z-70) - highest element to appear above everything */}
                   <div className={cn(
-                    "fixed inset-y-0 left-0 z-40 w-64 transition-transform duration-300 ease-in-out",
+                    "fixed inset-y-0 left-0 z-70 w-64 transition-transform duration-300 ease-in-out",
                     sidebarVisible ? "translate-x-0" : "-translate-x-full"
                   )}>
                     <ChatSidebar 
@@ -104,10 +106,14 @@ const ChatInterface: React.FC = () => {
                     />
                   </div>
                   
-                  {/* FIX: Add fixed positioning to the header and ensure it has a higher z-index */}
                   <div className="flex-1 flex flex-col h-full">
-                    {/* Increase z-index to ensure header is visible and add sticky positioning */}
-                    <div className="sticky top-0 z-50">
+                    {/* Header with conditional z-index:
+                        - When sidebar is visible: z-20 (below overlay elements)
+                        - When sidebar is closed: z-50 (above most content) */}
+                    <div className={cn(
+                      "sticky top-0 w-full bg-white dark:bg-gray-900",
+                      sidebarVisible ? "z-20" : "z-50"
+                    )}>
                       <ChatHeader toggleSidebar={toggleSidebar} />
                     </div>
                     <ChatMessages />
