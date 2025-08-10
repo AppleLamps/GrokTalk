@@ -308,15 +308,16 @@ export const xaiService = {
         console.log("Sending streaming request to OpenRouter API (attempt " + (retries + 1) + "):", 
           prepareRequestLog(XAI_API_URL, requestBody));
 
-        // Create AbortController for fetch timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-          streamAborted = true;
-          onError(new Error("Request timed out after 30 seconds"));
-        }, 30000); // 30 second timeout
-        
-        await openRouterProvider.streamResponse(formattedMessages, cleanApiKey, { onChunk, onComplete, onError }, options);
+        // Delegate streaming, timeout, and abort handling to the provider
+        await openRouterProvider.streamResponse(
+          formattedMessages,
+          cleanApiKey,
+          { onChunk, onComplete, onError },
+          options
+        );
+
+        // If the provider completed without throwing, exit the retry loop
+        return;
       } catch (error) {
         console.error(`Error streaming from OpenRouter API (attempt ${retries + 1}/${MAX_RETRIES + 1}):`, error);
 
