@@ -15,15 +15,15 @@ This guide will help you complete the setup of your GrokTalk application with da
    - From Project Settings → API: copy Project URL, anon key, and service role key
 
 3. **Update Environment Variables**:
-    
-    ```bash
-    # Update your .env file
-    POSTGRES_SUPABASE_URL="https://YOUR-PROJECT.supabase.co"
-    POSTGRES_NEXT_PUBLIC_SUPABASE_ANON_KEY="YOUR-ANON-KEY"
-    POSTGRES_SUPABASE_SERVICE_ROLE_KEY="YOUR-SERVICE-ROLE-KEY"
-    JWT_SECRET="your-secure-jwt-secret-32-chars-min"
-    ENCRYPTION_KEY="your-32-character-encryption-key-here"
-   ```
+
+```bash
+# Update your .env file
+POSTGRES_SUPABASE_URL="https://YOUR-PROJECT.supabase.co"
+POSTGRES_NEXT_PUBLIC_SUPABASE_ANON_KEY="YOUR-ANON-KEY"
+POSTGRES_SUPABASE_SERVICE_ROLE_KEY="YOUR-SERVICE-ROLE-KEY"
+JWT_SECRET="your-secure-jwt-secret-32-chars-min"
+ENCRYPTION_KEY="your-32-character-encryption-key-here"
+```
 
 4. **Generate Secure Keys**:
    ```bash

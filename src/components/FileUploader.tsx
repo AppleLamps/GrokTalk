@@ -234,7 +234,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     accept: acceptedFileTypes,
     maxSize: maxFileSize,
     noClick: false,
-    noKeyboard: false
+    noKeyboard: true
   });
 
   // Process files and extract content
@@ -387,9 +387,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           !disabled && files.length < maxFiles && !processing && "cursor-pointer",
           "h-28"
         )}
-        aria-disabled={disabled || processing || files.length >= maxFiles}
-        role="button"
-        tabIndex={0}
+        aria-label="File dropzone"
       >
         <input {...getInputProps()} aria-label="File input" />
 
@@ -403,8 +401,17 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           <>
             <Upload size={20} className="mb-2 text-gray-500 dark:text-gray-400" />
             <p className="text-sm text-gray-700 dark:text-gray-300 mb-1">
-              Drag & drop files here, or click to select
+              Drag & drop files here, or use the button to select
             </p>
+            <button
+              type="button"
+              onClick={open}
+              className="mt-1 inline-flex items-center rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              disabled={disabled || processing || files.length >= maxFiles}
+              aria-label="Browse files to upload"
+            >
+              Browse files
+            </button>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Supported formats: PDF, TXT, CSV, MD, JSON (max {formatFileSize(maxFileSize)})
             </p>
@@ -503,12 +510,12 @@ const FileUploader: React.FC<FileUploaderProps> = ({
               Processing files... ({processingProgress}%)
             </span>
           </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2" role="progressbar" aria-valuenow={processingProgress} aria-valuemin={0} aria-valuemax={100}>
-            <div
-              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-              style={{ width: `${processingProgress}%` }}
-            />
-          </div>
+          <progress
+            className="w-full mt-2 h-2 overflow-hidden rounded-full [appearance:none] [&::-webkit-progress-bar]:bg-gray-200 dark:[&::-webkit-progress-bar]:bg-gray-700 [&::-webkit-progress-value]:bg-blue-500 dark:[&::-webkit-progress-value]:bg-blue-500"
+            value={processingProgress}
+            max={100}
+            aria-label="File processing progress"
+          />
         </div>
       )}
 
