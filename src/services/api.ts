@@ -1,71 +1,22 @@
 import { toast } from "@/hooks/use-toast";
+import { openRouterProvider } from "./providers/openrouter";
+import type { APIOptions, ChatCompletionRequest, ChatCompletionResponse } from "./providers/types";
 
 // Shared type definitions
 type MessageRole = "system" | "user" | "assistant";
+type MessageContent = string | { type: "text" | "image_url"; text?: string; image_url?: { url: string; detail: "high" | "low" | "auto" } }[];
+interface Message { role: MessageRole; content: MessageContent; }
 
-type MessageContent = string | {
-  type: "text" | "image_url";
-  text?: string;
-  image_url?: {
-    url: string;
-    detail: "high" | "low" | "auto";
-  };
-}[];
-
-interface Message {
-  role: MessageRole;
-  content: MessageContent;
-}
-
-interface APIOptions {
-  temperature?: number;
-  max_tokens?: number;
-  model?: string;
-}
-
-interface ChatCompletionRequest {
-  model: string;
-  messages: Message[];
-  temperature?: number;
-  max_tokens?: number;
-  stream?: boolean;
-}
-
-interface ChatCompletionResponse {
-  id: string;
-  choices: {
-    index: number;
-    message: {
-      role: "assistant";
-      content: string;
-    };
-    finish_reason: string;
-  }[];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
-
-interface ChatCompletionStreamResponse {
-  id: string;
-  choices: {
-    index: number;
-    delta: {
-      content?: string;
-      role?: string;
-    };
-    finish_reason: string | null;
-  }[];
-}
+// Stream response type no longer needed directly; provider handles it
 
 // Configuration
-const XAI_API_URL = "https://api.x.ai/v1/chat/completions";
+// Switched to OpenRouter unified endpoint
+const XAI_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_OPTIONS: APIOptions = {
   temperature: 0.7,
   max_tokens: 8192,
-  model: "grok-2-latest"
+  // Default to Grok-4 via OpenRouter
+  model: "x-ai/grok-4"
 };
 
 // Max retries for API calls
@@ -99,7 +50,7 @@ const addMarkdownFormattingInstructions = (messages: Message[]): Message[] => {
     // Add a new system message if none exists
     updatedMessages.unshift({
       role: "system",
-      content: `You are Grok, an AI assistant powered by the grok-2-latest model. You are helpful, concise, and provide accurate information. ${formattingText}`
+      content: `You are an AI assistant. You are helpful, concise, and provide accurate information. ${formattingText}`
     });
   } else {
     // Update existing system message if it doesn't already have formatting instructions
@@ -187,7 +138,7 @@ const handleApiError = async (response: Response): Promise<never> => {
     } else if (response.status === 429) {
       throw new Error("Rate limit exceeded. Please try again later.");
     } else if (response.status >= 500) {
-      throw new Error(`Server error (${response.status}). The Grok API service may be experiencing issues.`);
+      throw new Error(`Server error (${response.status}). The AI service may be experiencing issues.`);
     } else {
       throw new Error(errorMessage);
     }
@@ -287,41 +238,20 @@ export const xaiService = {
           max_tokens: options.max_tokens || DEFAULT_OPTIONS.max_tokens,
         };
 
-        console.log("Sending request to XAI API (attempt " + (retries + 1) + "):", 
+        console.log("Sending request to OpenRouter API (attempt " + (retries + 1) + "):", 
           prepareRequestLog(XAI_API_URL, requestBody));
 
-        const response = await fetch(XAI_API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${cleanApiKey}`,
-            "Accept": "application/json"
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          await handleApiError(response);
-        }
-
-        const data: ChatCompletionResponse = await response.json();
-        
-        // Success!
-        if (retries > 0) {
-          console.log(`Request succeeded after ${retries} retries`);
-        }
-        
-        return data.choices[0].message.content;
+        return await openRouterProvider.sendMessage(formattedMessages, cleanApiKey, options);
       } catch (error) {
         lastError = error;
-        console.error(`Error calling XAI API (attempt ${retries + 1}/${MAX_RETRIES + 1}):`, error);
+        console.error(`Error calling OpenRouter API (attempt ${retries + 1}/${MAX_RETRIES + 1}):`, error);
         
         // If we've reached max retries, throw the error
         if (retries >= MAX_RETRIES) {
           if (error instanceof Error) {
-            throw new Error(`Failed to get response from XAI API: ${error.message}`);
+            throw new Error(`Failed to get response from OpenRouter API: ${error.message}`);
           }
-          throw new Error("Failed to get response from XAI API");
+          throw new Error("Failed to get response from OpenRouter API");
         }
         
         // Otherwise, retry after a delay
@@ -331,7 +261,7 @@ export const xaiService = {
     }
     
     // This should never be reached due to the throw in the catch block above
-    throw new Error("Failed to get response from XAI API after retries");
+    throw new Error("Failed to get response from OpenRouter API after retries");
   },
 
   /**
@@ -375,7 +305,7 @@ export const xaiService = {
           stream: true,
         };
 
-        console.log("Sending streaming request to XAI API (attempt " + (retries + 1) + "):", 
+        console.log("Sending streaming request to OpenRouter API (attempt " + (retries + 1) + "):", 
           prepareRequestLog(XAI_API_URL, requestBody));
 
         // Create AbortController for fetch timeout
@@ -386,106 +316,9 @@ export const xaiService = {
           onError(new Error("Request timed out after 30 seconds"));
         }, 30000); // 30 second timeout
         
-        const response = await fetch(XAI_API_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${cleanApiKey}`,
-            "Accept": "application/json"
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
-        });
-        
-        // Clear the timeout once we have a response
-        clearTimeout(timeoutId);
-        
-        if (streamAborted) return;
-
-        if (!response.ok) {
-          await handleApiError(response);
-        }
-
-        if (!response.body) {
-          throw new Error("Response body is null");
-        }
-
-        // Process the stream
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-
-        let buffer = '';
-        let streamDone = false;
-        let isComplete = false;
-        
-        // Set a timeout for reading the stream
-        const streamTimeoutId = setTimeout(() => {
-          streamAborted = true;
-          reader.cancel("Stream timeout after 60 seconds").catch(console.error);
-          onError(new Error("Stream timed out after 60 seconds"));
-        }, 60000); // 60 second timeout
-
-        try {
-          while (!streamDone && !streamAborted) {
-            const { value, done } = await reader.read();
-            streamDone = done;
-
-            if (value) {
-              // Decode the chunk and add it to our buffer
-              buffer += decoder.decode(value, { stream: true });
-
-              // Process complete events in the buffer
-              const lines = buffer.split('\n');
-              // Keep the last line in the buffer if it's incomplete
-              buffer = lines.pop() || '';
-
-              for (const line of lines) {
-                if (line.trim() === '') continue;
-
-                if (processStreamLine(line, onChunk, () => { isComplete = true; })) {
-                  streamDone = true;
-                  break;
-                }
-              }
-            }
-          }
-
-          // Process any remaining data in the buffer
-          if (buffer && !streamAborted) {
-            const lines = buffer.split('\n').filter(Boolean);
-
-            for (const line of lines) {
-              if (processStreamLine(line, onChunk, () => { isComplete = true; })) {
-                break;
-              }
-            }
-          }
-          
-          // Clear stream timeout
-          clearTimeout(streamTimeoutId);
-          
-          // Only call onComplete if we're not already aborted
-          if (!streamAborted) {
-            // Final decoding with stream=false to flush any remaining characters
-            decoder.decode();
-            
-            // Always call onComplete at the end of the stream
-            onComplete();
-            
-            // Log success after retries if needed
-            if (retries > 0) {
-              console.log(`Streaming succeeded after ${retries} retries`);
-            }
-            
-            // Successfully completed, return from function
-            return;
-          }
-        } catch (streamError) {
-          clearTimeout(streamTimeoutId);
-          throw streamError;
-        }
+        await openRouterProvider.streamResponse(formattedMessages, cleanApiKey, { onChunk, onComplete, onError }, options);
       } catch (error) {
-        console.error(`Error streaming from XAI API (attempt ${retries + 1}/${MAX_RETRIES + 1}):`, error);
+        console.error(`Error streaming from OpenRouter API (attempt ${retries + 1}/${MAX_RETRIES + 1}):`, error);
 
         if (streamAborted) {
           return;
@@ -496,7 +329,7 @@ export const xaiService = {
           if (error instanceof Error) {
             onError(error);
           } else {
-            onError(new Error("Failed to stream response from XAI API after multiple attempts"));
+            onError(new Error("Failed to stream response from OpenRouter API after multiple attempts"));
           }
           return;
         }

@@ -6,6 +6,7 @@ interface SettingsContextType {
   apiKey: string;
   modelTemperature: number;
   maxTokens: number;
+  currentModel: string;
   settingsOpen: boolean;
   setSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
   
@@ -13,9 +14,10 @@ interface SettingsContextType {
   setApiKey: React.Dispatch<React.SetStateAction<string>>;
   setModelTemperature: React.Dispatch<React.SetStateAction<number>>;
   setMaxTokens: React.Dispatch<React.SetStateAction<number>>;
+  setCurrentModel: React.Dispatch<React.SetStateAction<string>>;
   
   // Functions
-  handleSaveSettings: (key: string, temp: number, tokens: number) => void;
+  handleSaveSettings: (key: string, temp: number, tokens: number, model?: string) => void;
 }
 
 // Create context with default values
@@ -27,6 +29,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [apiKey, setApiKey] = useState("");
   const [modelTemperature, setModelTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(4000);
+  const [currentModel, setCurrentModel] = useState<string>('x-ai/grok-4');
   const [settingsOpen, setSettingsOpen] = useState(false);
   
   const { toast } = useToast();
@@ -36,6 +39,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     const storedApiKey = localStorage.getItem('apiKey');
     const storedTemperature = localStorage.getItem('modelTemperature');
     const storedMaxTokens = localStorage.getItem('maxTokens');
+    const storedModel = localStorage.getItem('currentModel');
     
     if (storedApiKey) {
       setApiKey(storedApiKey);
@@ -51,12 +55,19 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (storedMaxTokens) {
       setMaxTokens(parseInt(storedMaxTokens, 10));
     }
+
+    if (storedModel) {
+      setCurrentModel(storedModel);
+    }
   }, []);
   
-  const handleSaveSettings = (key: string, temp: number, tokens: number) => {
+  const handleSaveSettings = (key: string, temp: number, tokens: number, model?: string) => {
     setApiKey(key);
     setModelTemperature(temp);
     setMaxTokens(tokens);
+    if (model) {
+      setCurrentModel(model);
+    }
     
     // Save to localStorage
     if (key) {
@@ -65,6 +76,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     
     localStorage.setItem('modelTemperature', temp.toString());
     localStorage.setItem('maxTokens', tokens.toString());
+    if (model) {
+      localStorage.setItem('currentModel', model);
+    }
     
     // Close settings after saving
     setSettingsOpen(false);
@@ -79,12 +93,14 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     apiKey,
     modelTemperature,
     maxTokens,
+    currentModel,
     settingsOpen,
     setSettingsOpen,
     
     setApiKey,
     setModelTemperature,
     setMaxTokens,
+    setCurrentModel,
     
     handleSaveSettings,
   };

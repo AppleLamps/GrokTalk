@@ -28,7 +28,7 @@ const Projects: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>(localStorage.getItem("apiKey") || "");
   const [temperature, setTemperature] = useState<number>(parseFloat(localStorage.getItem("temperature") || "0.7"));
   const [maxTokens, setMaxTokens] = useState<number>(parseInt(localStorage.getItem("maxTokens") || "8192"));
-  const [currentModel, setCurrentModel] = useState<string>(localStorage.getItem("currentModel") || "grok-2-latest");
+  const [currentModel, setCurrentModel] = useState<string>(localStorage.getItem("currentModel") || "x-ai/grok-4");
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'create' | 'configure'>('configure');
   const [activeRightTab, setActiveRightTab] = useState<'preview' | 'assistant'>('preview');
@@ -871,7 +871,6 @@ const Projects: React.FC = () => {
                     onChange={handleInputChange}
                     placeholder="What's your GPT called?"
                     className={`w-full h-12 px-4 py-3 border ${validationErrors.name ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 dark:border-gray-600 focus:ring-emerald-500 focus:border-emerald-500'} rounded-lg shadow-sm focus:outline-none focus:ring-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-all`}
-                    aria-invalid={!!validationErrors.name}
                     aria-describedby={validationErrors.name ? "name-error" : undefined}
                     required
                   />
@@ -896,7 +895,7 @@ const Projects: React.FC = () => {
                       onChange={handleInputChange}
                       placeholder="What does your GPT do? (Optional)"
                       rows={3}
-                      style={{ minHeight: '100px', maxHeight: '200px' }}
+                      // min/max heights handled via CSS utility classes if needed
                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-all"
                     />
                     <div className="absolute right-4 bottom-3 text-xs text-gray-400">
@@ -937,9 +936,7 @@ const Projects: React.FC = () => {
                       onChange={handleInputChange}
                       placeholder="Be a helpful assistant that..."
                       rows={8}
-                      style={{ minHeight: '200px', maxHeight: '400px' }}
                       className={`w-full px-4 py-3 border ${validationErrors.instructions ? 'border-red-500 dark:border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 dark:border-gray-600 focus:ring-emerald-500 focus:border-emerald-500'} rounded-lg shadow-sm focus:outline-none focus:ring-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-all`}
-                      aria-invalid={!!validationErrors.instructions}
                       aria-describedby={validationErrors.instructions ? "instructions-error" : undefined}
                     />
                     <div className="absolute right-4 bottom-3 text-xs text-gray-400">
@@ -1001,6 +998,8 @@ const Projects: React.FC = () => {
                       onClick={handleAddConversationStarter}
                       disabled={!conversationStarter.trim()}
                       className={`p-2 rounded-lg ${conversationStarter.trim() ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-not-allowed'} transition-colors`}
+                      aria-label="Add conversation starter"
+                      title="Add conversation starter"
                     >
                       <Plus size={18} />
                     </button>
@@ -1153,6 +1152,8 @@ const Projects: React.FC = () => {
                         type="submit"
                         disabled={!chatMessage.trim() || isLoading}
                         className={`ml-1 p-2 rounded-md ${chatMessage.trim() && !isLoading ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'} transition-colors`}
+                        aria-label="Send message"
+                        title="Send message"
                       >
                         {isLoading ? (
                           <div className="h-5 w-5 rounded-full border-2 border-gray-400 border-t-white animate-spin" />

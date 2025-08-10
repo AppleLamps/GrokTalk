@@ -186,12 +186,7 @@ const ChatHeader = ({ toggleSidebar }: ChatHeaderProps) => {
       </div>
 
       {/* Model indicator */}
-      <div className="relative">
-        <div className="flex items-center space-x-1 text-sm font-medium text-gray-700 dark:text-gray-200 py-1 px-3 rounded-md border border-gray-200 dark:border-gray-700">
-          <Sparkles size={16} className="text-green-500 mr-2" />
-          <span>Grok-2</span>
-        </div>
-      </div>
+      {/* Model selector moved to the input bar */}
       
       <div className="flex items-center space-x-2">
         {/* Export PDF button */}

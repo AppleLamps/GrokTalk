@@ -136,6 +136,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
 
   // Refs
   const streamingContentRef = useRef<string>("");
+  const streamCompletedRef = useRef<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -216,9 +217,27 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
       setCurrentChatId(currentChatIdData);
     }
 
+    // Normalize any legacy Grok greeting in stored messages
+    const normalizeGreeting = (msgs: Message[]): Message[] => {
+      const oldText = "Hello! I'm Grok, your AI assistant. How can I help you today?";
+      const newText = "Hello! I'm your AI assistant. How can I help you today?";
+      let changed = false;
+      const mapped = msgs.map(m => {
+        if (m.role === 'assistant' && typeof m.content === 'string' && m.content.trim() === oldText) {
+          changed = true;
+          return { ...m, content: newText };
+        }
+        return m;
+      });
+      if (changed) {
+        try { storeInLocalStorage(STORAGE_KEYS.MESSAGES, mapped); } catch {}
+      }
+      return mapped;
+    };
+
     // Set messages or add welcome message
     if (savedMessages.length > 0) {
-      setMessages(savedMessages);
+      setMessages(normalizeGreeting(savedMessages));
 
       // Generate new chat ID if needed
       if (!currentChatIdData && savedMessages.length > 1) {
@@ -283,14 +302,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
 
         const customBot = JSON.parse(customBotString);
 
-        // Create a system message with the bot's instructions first
-        const customSystemMessage: Message = {
-          id: generateId('system_'),
-          role: 'system',
-          content: customBot.instructions,
-          timestamp: new Date()
-        };
-
         // Create a welcome message that reflects the bot's personality
         // Use a format that aligns with the bot's identity
         let welcomeContent = '';
@@ -319,11 +330,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
           timestamp: new Date()
         };
 
-        // Set the messages - system message first, then welcome message
-        setMessages([customSystemMessage, customWelcomeMessage]);
+        // Set the messages - do NOT include system instructions in visible chat
+        setMessages([customWelcomeMessage]);
 
-        // Store the bot info in a more persistent way so it applies to the entire conversation
-        // We'll keep it for the entire chat session until a new chat is started
+        // Store the bot info for behind-the-scenes usage when sending messages
         sessionStorage.setItem('activeCustomBot', customBotString);
 
         // Clear just the localStorage version which is only for initialization
@@ -339,7 +349,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
     const welcomeMessage: Message = {
       id: generateId('msg_'),
       role: 'assistant',
-      content: 'Hello! I\'m Grok, your AI assistant. How can I help you today?',
+      content: "Hello! I'm your AI assistant. How can I help you today?",
       timestamp: new Date()
     };
 
@@ -532,14 +542,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
     const existingSystemMessage = currentMessageList.find(msg => msg.role === 'system');
 
     if (existingSystemMessage) {
-      // Use the existing system message from the conversation history
-      // Apply the enhancement to ensure personality is maintained
-      const enhancedSystemContent = enhanceSystemMessageForCustomBot(existingSystemMessage.content.toString());
-
-      apiMessages.push({
-        role: 'system',
-        content: enhancedSystemContent
-      });
+      // Do not surface or reuse visible system messages in chat; we'll build system from active bot or defaults
     } else {
       // No system message in history, check if we have an active custom bot
       let customBotString = sessionStorage.getItem('activeCustomBot');
@@ -556,11 +559,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
           // Enhance the instructions to ensure personality is properly maintained
           const enhancedInstructions = enhanceSystemMessageForCustomBot(customBot.instructions);
 
-          // Add custom system message with the enhanced bot instructions
-          apiMessages.push({
-            role: 'system',
-            content: enhancedInstructions
-          });
+          // Add system message with enhanced bot instructions (hidden; not shown in chat history)
+          apiMessages.push({ role: 'system', content: enhancedInstructions });
 
           // Ensure the custom bot info persists for the whole conversation
           if (localStorage.getItem('currentCustomBot')) {
@@ -570,17 +570,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
         } catch (error) {
           console.error('Failed to parse custom bot data:', error);
           // Fallback to default system message
-          apiMessages.push({
-            role: 'system',
-            content: "You are Grok, an AI assistant. You are helpful, creative, and provide accurate information. Answer questions in a friendly, conversational manner. You have the ability to generate images when users request them, and you can analyze images that users upload. When users ask for image generation, their prompts will be enhanced with AI to create better results. IMPORTANT: If the user asks you to generate an image, tell them you're generating it, but do not respond with 'Here's the image' as the system will automatically display the image after it's generated. NEVER send a separate follow-up message asking what kind of image they want - their request will be processed automatically by the system."
-          });
+          apiMessages.push({ role: 'system', content: "You are an AI assistant. You are helpful, creative, and provide accurate information. Answer questions in a friendly, conversational manner." });
         }
       } else {
         // Default system message when no custom bot is active
-        apiMessages.push({
-          role: 'system',
-          content: "You are Grok, an AI assistant. You are helpful, creative, and provide accurate information. Answer questions in a friendly, conversational manner. You have the ability to generate images when users request them, and you can analyze images that users upload. When users ask for image generation, their prompts will be enhanced with AI to create better results. IMPORTANT: If the user asks you to generate an image, tell them you're generating it, but do not respond with 'Here's the image' as the system will automatically display the image after it's generated. NEVER send a separate follow-up message asking what kind of image they want - their request will be processed automatically by the system."
-        });
+        apiMessages.push({ role: 'system', content: "You are an AI assistant. You are helpful, creative, and provide accurate information. Answer questions in a friendly, conversational manner." });
       }
     }
 
@@ -732,10 +726,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
       return;
     }
 
-    // Create user message or assistant message for image generation
-    const newMessage: Message = {
+      // Create user message (or assistant placeholder for image gen)
+      const newMessage: Message = {
       id,
-      role: isGeneratingImage ? "assistant" : "user",
+        role: "user",
       content: messageContent,
       timestamp: new Date(),
       fileContents: fileContents || undefined,
@@ -770,6 +764,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
 
       setStreamingMessage(initialStreamingMessage);
       streamingContentRef.current = "";
+      streamCompletedRef.current = false;
 
       // Standard model flow (no Sonar)
       try {
@@ -785,14 +780,16 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
         }))));
 
         // Select model
-        const modelToUse = shouldUseVisionModel ? "grok-2-vision-latest" : currentModel;
+        const modelToUse = shouldUseVisionModel ? "x-ai/grok-vision-beta" : currentModel;
 
-        // Use streaming API with API-aligned callback structure
+      // Use streaming API with API-aligned callback structure (single-flight guard)
+      if (streamCompletedRef.current) return;
         await xaiService.streamResponse(
           apiMessages,
           apiKey,
           {
             onChunk: (chunk) => {
+              if (streamCompletedRef.current) return;
               // Update content ref
               if (typeof streamingContentRef.current === 'string') {
                 streamingContentRef.current += chunk;
@@ -820,6 +817,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
               });
             },
             onComplete: () => {
+              if (streamCompletedRef.current) return;
+              streamCompletedRef.current = true;
               // Get final content
               const finalContent = streamingContentRef.current;
 
@@ -867,10 +866,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
               console.error("Stream error:", error);
               setIsProcessing(false);
               setStreamingMessage(null);
+              streamCompletedRef.current = true;
 
               toast({
                 title: "Error",
-                description: error.message || "Failed to get response from Grok.",
+              description: error.message || "Failed to get response from the AI backend.",
                 variant: "destructive",
               });
             }
@@ -949,7 +949,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
       const apiMessages = prepareApiMessages(userMessage, previousMessages, shouldUseVisionModel);
 
       // Select model
-      const modelToUse = shouldUseVisionModel ? "grok-2-vision-latest" : currentModel;
+      const modelToUse = shouldUseVisionModel ? "x-ai/grok-vision-beta" : currentModel;
 
       // Create streaming message placeholder
       const streamingMessageId = generateId('assistant-');
@@ -962,6 +962,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
 
       setStreamingMessage(initialStreamingMessage);
       streamingContentRef.current = "";
+      streamCompletedRef.current = false;
 
       // Use streaming API
       await xaiService.streamResponse(
@@ -969,6 +970,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
         apiKey,
         {
           onChunk: (chunk) => {
+            if (streamCompletedRef.current) return;
             // Update content ref
             if (typeof streamingContentRef.current === 'string') {
               streamingContentRef.current += chunk;
@@ -986,6 +988,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
             });
           },
           onComplete: () => {
+            if (streamCompletedRef.current) return;
+            streamCompletedRef.current = true;
             // Get final content
             const finalContent = streamingContentRef.current;
 
@@ -1009,6 +1013,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
             console.error("Stream error during regeneration:", error);
             setIsProcessing(false);
             setStreamingMessage(null);
+            streamCompletedRef.current = true;
 
             toast({
               title: "Error",

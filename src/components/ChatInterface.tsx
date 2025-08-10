@@ -74,7 +74,7 @@ const ChatInterface: React.FC = () => {
             apiKey={settingsProps.apiKey}
             modelTemperature={settingsProps.modelTemperature}
             maxTokens={settingsProps.maxTokens}
-            currentModel="grok-2-latest"
+            currentModel={settingsProps.currentModel}
           >
             <div className="flex h-screen bg-white dark:bg-gray-900 overflow-hidden">
               {/* Responsive layout with different behavior for mobile and desktop */}

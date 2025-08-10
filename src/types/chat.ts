@@ -31,7 +31,20 @@ export interface MessageRequestInterface {
 }
 
 // Types for model selection
-export type ModelType = "grok-2-latest" | "grok-2-vision-latest";
+// OpenRouter model slugs
+export type ModelType =
+  | "x-ai/grok-3"
+  | "x-ai/grok-4"
+  | "x-ai/grok-vision-beta"
+  | "google/gemini-2.5-flash-lite"
+  | "google/gemini-2.5-flash"
+  | "google/gemini-2.5-pro"
+  | "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+  | "openai/gpt-5"
+  | "openai/gpt-5-chat"
+  | "openai/gpt-5-mini"
+  | "anthropic/claude-opus-4.1"
+  | "anthropic/claude-sonnet-4";
 
 // Payload type for vision requests
 export interface GPT4VisionPayload {

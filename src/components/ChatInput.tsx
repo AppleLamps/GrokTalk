@@ -1,9 +1,11 @@
 import React, { useState, FormEvent, useRef, useEffect } from "react";
-import { Send, Plus, X, Image as ImageIcon, Paperclip, ChevronDown, ChevronUp, Camera } from "lucide-react";
+import { Send, Plus, X, Image as ImageIcon, Paperclip, ChevronDown, ChevronUp, Camera, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import FileUploader, { ProcessedFile } from "./FileUploader";
 import { useToast } from "@/hooks/use-toast";
 import { xaiService } from "@/services/api";
+import { useSettings } from "@/contexts/SettingsContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Helper function to generate IDs
 const generateId = (prefix: string = ''): string => {
@@ -40,6 +42,7 @@ const ChatInput = ({
   const { toast } = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { currentModel, setCurrentModel } = useSettings();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -100,7 +103,12 @@ const ChatInput = ({
     
     // Send the message with images and/or files
     onSendMessage(trimmedInput, imageDataUrls, processedFiles);
-    
+
+    // Close the file uploader if files were attached
+    if (processedFiles.length > 0) {
+      setShowFileUploader(false);
+    }
+
     // Clear selected images and files after sending
     setSelectedImages([]);
     setProcessedFiles([]);
@@ -134,15 +142,17 @@ const ChatInput = ({
         }
       ];
       
-      // Call the API to enhance the prompt
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      // Call the API to enhance the prompt via OpenRouter
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': window?.location?.origin || '',
+          'X-Title': 'GrokTalk'
         },
         body: JSON.stringify({
-          model: "grok-2",
+          model: "x-ai/grok-3",
           messages: messages,
           temperature: 0.7,
           max_tokens: 150
@@ -193,15 +203,18 @@ const ChatInput = ({
       // Enhance the prompt using AI
       const enhancedPrompt = await enhancePromptWithAI(prompt);
       
-      // Make API request to xAI with the enhanced prompt
-      const response = await fetch('https://api.x.ai/v1/images/generations', {
+      // Make API request to image generation endpoint (OpenRouter DALL-E compatible if available)
+      const response = await fetch('https://openrouter.ai/api/v1/images', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': window?.location?.origin || '',
+          'X-Title': 'GrokTalk'
         },
         body: JSON.stringify({
-          model: "grok-2-image",
+          // Note: update to a supported image model on OpenRouter if needed
+          model: "openai/dall-e-3",
           prompt: enhancedPrompt,
           n: 1,
           response_format: "url"
@@ -380,6 +393,8 @@ const ChatInput = ({
                     type="button"
                     onClick={() => removeImage(index)}
                     className="absolute -top-2 -right-2 bg-gray-800 dark:bg-gray-600 text-white rounded-full p-0.5"
+                    aria-label="Remove image"
+                    title="Remove image"
                   >
                     <X size={14} />
                   </button>
@@ -415,7 +430,7 @@ const ChatInput = ({
                   ? "Describe the image you want to generate..."
                   : processedFiles.length > 0 
                       ? "Ask a question about the attached file(s)..." 
-                      : "Message Grok..."
+                      : "Message assistant..."
               }
               disabled={isProcessing}
               className={cn(
@@ -438,6 +453,8 @@ const ChatInput = ({
                 multiple
                 accept="image/jpeg,image/jpg,image/png"
                 className="hidden"
+                aria-label="Upload images"
+                title="Upload images"
               />
               <button 
                 type="button"
@@ -490,8 +507,43 @@ const ChatInput = ({
             
             <div className="flex items-center gap-2">
               {!imageGenerationMode && (
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Grok may produce inaccurate information
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={currentModel}
+                    onValueChange={(value) => {
+                      setCurrentModel(value);
+                      try { localStorage.setItem('currentModel', value); } catch {}
+                    }}
+                  >
+                    <SelectTrigger
+                      className={cn(
+                        "h-8 px-2 rounded-md border border-gray-200 dark:border-gray-700",
+                        "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200",
+                        "hover:bg-gray-50 dark:hover:bg-gray-700"
+                      )}
+                      aria-label="Select model"
+                      title="Select model"
+                      disabled={isProcessing}
+                    >
+                      <div className="flex items-center gap-1">
+                        <Sparkles size={14} className="text-green-500" />
+                        <SelectValue placeholder="Select model" />
+                      </div>
+                    </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      <SelectItem value="x-ai/grok-3">Grok‑3</SelectItem>
+                      <SelectItem value="x-ai/grok-4">Grok‑4</SelectItem>
+                      <SelectItem value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</SelectItem>
+                      <SelectItem value="google/gemini-2.5-flash">Gemini 2.5 Flash</SelectItem>
+                      <SelectItem value="google/gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
+                      <SelectItem value="cognitivecomputations/dolphin-mistral-24b-venice-edition:free">Venice Uncensored</SelectItem>
+                      <SelectItem value="openai/gpt-5">GPT‑5 (thinking)</SelectItem>
+                      <SelectItem value="openai/gpt-5-chat">GPT‑5</SelectItem>
+                      <SelectItem value="openai/gpt-5-mini">GPT‑5 Mini</SelectItem>
+                      <SelectItem value="anthropic/claude-opus-4.1">Claude Opus 4.1</SelectItem>
+                      <SelectItem value="anthropic/claude-sonnet-4">Claude Sonnet 4</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
               
@@ -523,7 +575,7 @@ const ChatInput = ({
           <span className="ml-1">
             {imageGenerationMode 
               ? "Generating image..." 
-              : "Grok is thinking..."}
+              : "Thinking..."}
           </span>
         </div>
       )}

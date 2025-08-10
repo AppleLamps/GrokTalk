@@ -63,15 +63,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
     setIsTestingKey(true);
     try {
-      console.log("Testing XAI API key...");
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      console.log("Testing OpenRouter API key...");
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${inputApiKey}`
+          'Authorization': `Bearer ${inputApiKey}`,
+          'HTTP-Referer': window?.location?.origin || '',
+          'X-Title': 'GrokTalk'
         },
         body: JSON.stringify({
-          model: "grok-2",
+          model: "x-ai/grok-3",
           messages: [{ role: "user", content: "Hello" }],
           max_tokens: 10
         })
@@ -80,7 +82,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       if (response.ok) {
         toast({
           title: "API Key Valid",
-          description: "Your XAI API key is working correctly!",
+          description: "Your OpenRouter API key is working correctly!",
         });
       } else {
         const error = await response.json();
@@ -125,6 +127,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <button 
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              aria-label="Close settings"
+              title="Close settings"
             >
               <X size={20} />
             </button>
@@ -134,10 +138,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             {/* API Key Section */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                xAI API Key
+                 OpenRouter API Key
               </label>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Your API key for accessing the xAI (Grok) API. Required for all functionality.
+                Your API key for accessing OpenRouter (Grok-3/4 and many other models). Required for all functionality.
               </p>
               <div className="flex relative">
                 <Input
@@ -145,7 +149,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   value={inputApiKey}
                   onChange={(e) => setInputApiKey(e.target.value)}
                   className="pr-10"
-                  placeholder="Enter your xAI API key..."
+                  placeholder="Enter your OpenRouter API key..."
                 />
                 <button
                   type="button"
@@ -175,13 +179,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </button>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Get your API key at <a 
-                  href="https://x.ai" 
+                 Get your API key at <a 
+                  href="https://openrouter.ai" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300"
                 >
-                  x.ai
+                  openrouter.ai
                 </a>.
               </p>
             </div>

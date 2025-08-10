@@ -479,7 +479,7 @@ const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
             )}
             
             <span className="text-gray-900 dark:text-gray-100">
-              {isUser ? "You" : (customBotName || "Grok")}
+              {isUser ? "You" : (customBotName || "Assistant")}
             </span>
             
             {/* Timestamp display */}
