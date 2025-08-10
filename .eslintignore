@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.next/
+
+# Generated files
+*.d.ts
+
+# Configuration files
+tailwind.config.ts
+vite.config.ts
+postcss.config.js
+
+# Test files
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Legacy or external files
+test-db.js
+ChatMessage.tsx
+
+# Environment files
+.env*
+
+# Prisma generated
+prisma/migrations/
