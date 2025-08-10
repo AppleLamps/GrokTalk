@@ -1,11 +1,22 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import bcrypt from 'bcryptjs';
 import { getSupabaseAdmin } from '../../src/lib/supabaseServer';
+import applyCors from '../../src/lib/cors';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+<<<<<<< HEAD
+=======
+  try {
+    await applyCors(req, res);
+  } catch (error) {
+    console.error('CORS error:', error);
+    return res.status(500).json({ error: 'Failed to apply CORS' });
+  }
+
+  // If `applyCors` handled the preflight OPTIONS request, we can exit early.
+>>>>>>> 9facf0c76bdd5df12913356dcd563cf2426c4451
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(204).end();
   }
 
   if (req.method !== 'POST') {
