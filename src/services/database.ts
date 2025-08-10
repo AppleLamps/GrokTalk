@@ -2,7 +2,7 @@ import { Project, Message, SavedChat } from '../types/chat';
 
 const API_BASE_URL = process.env.VITE_API_BASE_URL || 
   (process.env.NODE_ENV === 'production' 
-    ? 'https://groktalk-api.vercel.app/api' 
+    ? 'https://grok-talk.vercel.app/api' 
     : 'http://localhost:3001/api');
 
 // Helper function to get auth token from localStorage
