@@ -53,7 +53,13 @@ npm install
 ```
 
 ### 2. Environment Configuration
-Create a `.env` file in the root directory:
+Copy the example environment file and configure your variables:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` with your actual values:
 
 ```env
 # Database (Supabase)
@@ -64,12 +70,17 @@ SUPABASE_ANON_KEY="your-supabase-anon-key"
 NEXT_PUBLIC_SUPABASE_URL="your-supabase-project-url"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your-supabase-anon-key"
 
+# API Configuration (Important for deployment)
+VITE_API_BASE_URL="https://your-backend-api.vercel.app/api"
+
 # Authentication
 JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
 ENCRYPTION_KEY="your-32-character-encryption-key-here"
 NEXTAUTH_SECRET="your-nextauth-secret-key"
 NEXTAUTH_URL="http://localhost:3000"
 ```
+
+**Important**: Set `VITE_API_BASE_URL` to your deployed backend API URL to avoid CORS issues.
 
 ### 3. Database Setup
 ```bash
@@ -171,9 +182,14 @@ GrokTalk/
 ## 🚀 Deployment
 
 ### Frontend (Vercel/Netlify)
-1. Build the project: `npm run build`
-2. Deploy the `dist` folder
-3. Set environment variables in your hosting platform
+1. Set environment variables in your hosting platform:
+   - `VITE_API_BASE_URL`: Your backend API URL (e.g., `https://your-backend.vercel.app/api`)
+   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anon key
+2. Build the project: `npm run build`
+3. Deploy the `dist` folder
+
+**Critical**: Ensure `VITE_API_BASE_URL` points to your deployed backend to avoid CORS errors.
 
 ### Backend (Railway/Heroku)
 1. Set up environment variables
