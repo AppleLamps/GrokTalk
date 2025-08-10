@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Plus, Bot, User, Send, Trash2, Calendar, FolderKanban, Eye, MessageSquare, BookOpen, Code, Briefcase, Lightbulb, X, CheckCircle, Save, ArrowLeftCircle, ArrowRightCircle } from 'lucide-react';
+import { ChevronLeft, Plus, Bot, User, Send, Trash2, Calendar, FolderKanban, Eye, MessageSquare, BookOpen, Code, Briefcase, Lightbulb, X, CheckCircle, Save, ArrowLeftCircle, ArrowRightCircle, ArrowUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useProjects, Project } from '@/contexts/ProjectsContext';
 import { initialMessages, SampleGPTInstructions } from '@/lib/ProjectAIInstructions';
@@ -1151,14 +1151,14 @@ const Projects: React.FC = () => {
                       <button
                         type="submit"
                         disabled={!chatMessage.trim() || isLoading}
-                        className={`ml-1 p-2 rounded-md ${chatMessage.trim() && !isLoading ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'} transition-colors`}
+                        className={`ml-1 p-2 rounded-full transition-all duration-200 shadow-sm ${chatMessage.trim() && !isLoading ? 'bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow-md transform hover:scale-105' : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-50'}`}
                         aria-label="Send message"
                         title="Send message"
                       >
                         {isLoading ? (
-                          <div className="h-5 w-5 rounded-full border-2 border-gray-400 border-t-white animate-spin" />
+                          <div className="h-4 w-4 rounded-full border-2 border-gray-400 border-t-white animate-spin" />
                         ) : (
-                          <Send size={16} className="transform rotate-45" />
+                          <ArrowUp size={16} className="transition-transform duration-200" />
                         )}
                       </button>
                     </form>

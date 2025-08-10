@@ -62,6 +62,7 @@ interface ChatContextType {
   handleStartNewChat: () => void;
   loadSavedChat: (chatId: string) => void;
   deleteSavedChat: (chatId: string, e: React.MouseEvent) => void;
+  renameSavedChat: (chatId: string, newTitle: string) => void;
   saveCurrentChat: () => void;
   getChatTitle: (chatMessages: Message[]) => string;
   messagesEndRef: React.RefObject<HTMLDivElement>;
@@ -459,6 +460,21 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
     toast({
       title: "Chat Deleted",
       description: "The chat has been removed from your history.",
+    });
+  };
+
+  // Rename saved chat
+  const renameSavedChat = (chatId: string, newTitle: string) => {
+    const updatedChats = savedChats.map(chat => 
+      chat.id === chatId 
+        ? { ...chat, title: newTitle.trim() || "Untitled Chat", lastUpdated: new Date() }
+        : chat
+    );
+    setSavedChats(updatedChats);
+
+    toast({
+      title: "Chat Renamed",
+      description: "The chat title has been updated.",
     });
   };
 
@@ -1093,6 +1109,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
     handleStartNewChat,
     loadSavedChat,
     deleteSavedChat,
+    renameSavedChat,
     saveCurrentChat,
     getChatTitle,
     messagesEndRef,

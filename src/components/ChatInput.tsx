@@ -1,5 +1,5 @@
 import React, { useState, FormEvent, useRef, useEffect } from "react";
-import { Send, Plus, X, Image as ImageIcon, Paperclip, ChevronDown, ChevronUp, Camera, Sparkles } from "lucide-react";
+import { Send, Plus, X, Image as ImageIcon, Paperclip, ChevronDown, ChevronUp, Camera, Sparkles, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import FileUploader, { ProcessedFile } from "./FileUploader";
 import { useToast } from "@/hooks/use-toast";
@@ -551,16 +551,16 @@ const ChatInput = ({
                 type="submit"
                 disabled={(!input.trim() && selectedImages.length === 0 && processedFiles.length === 0) || isProcessing}
                 className={cn(
-                  "p-1.5 rounded-lg transition-colors ml-2",
+                  "p-2 rounded-full transition-all duration-200 ml-2 shadow-sm",
                   (input.trim() || selectedImages.length > 0 || processedFiles.length > 0) && !isProcessing 
                     ? imageGenerationMode
-                      ? "bg-purple-600 text-white hover:bg-purple-700"
-                      : "bg-green-600 text-white hover:bg-green-700" 
+                      ? "bg-purple-600 text-white hover:bg-purple-700 hover:shadow-md transform hover:scale-105"
+                      : "bg-green-600 text-white hover:bg-green-700 hover:shadow-md transform hover:scale-105" 
                     : "bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 opacity-50 cursor-not-allowed"
                 )}
                 aria-label="Send message"
               >
-                <Send size={16} className={(input.trim() || selectedImages.length > 0 || processedFiles.length > 0) && !isProcessing ? "rotate-0" : "rotate-45"} />
+                <ArrowUp size={16} className="transition-transform duration-200" />
               </button>
             </div>
           </div>

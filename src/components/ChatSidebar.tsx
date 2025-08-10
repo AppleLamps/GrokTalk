@@ -1,5 +1,5 @@
-import React from 'react';
-import { Plus, MessageSquare, Trash2, Settings, X, Menu, FolderKanban } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, MessageSquare, Trash2, Settings, X, Menu, FolderKanban, Edit2, Check, X as XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ThemeToggle from './ThemeToggle';
 import { useChatContext } from '@/contexts/ChatContext';
@@ -21,11 +21,48 @@ const ChatSidebar = ({ sidebarVisible, formatDate, toggleSidebar }: ChatSidebarP
     savedChats,
     handleStartNewChat,
     loadSavedChat,
-    deleteSavedChat
+    deleteSavedChat,
+    renameSavedChat
   } = useChatContext();
+
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string>('');
 
   const { setSettingsOpen } = useSettings();
   const navigate = useNavigate();
+
+  // Handle starting rename
+  const handleStartRename = (chatId: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingChatId(chatId);
+    setEditingTitle(currentTitle);
+  };
+
+  // Handle confirming rename
+  const handleConfirmRename = (chatId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (editingTitle.trim()) {
+      renameSavedChat(chatId, editingTitle.trim());
+    }
+    setEditingChatId(null);
+    setEditingTitle('');
+  };
+
+  // Handle canceling rename
+  const handleCancelRename = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingChatId(null);
+    setEditingTitle('');
+  };
+
+  // Handle key press in rename input
+  const handleRenameKeyPress = (e: React.KeyboardEvent, chatId: string) => {
+    if (e.key === 'Enter') {
+      handleConfirmRename(chatId);
+    } else if (e.key === 'Escape') {
+      handleCancelRename();
+    }
+  };
 
   // Group chats by date for display
   const groupChatsByDate = (): Record<string, typeof savedChats> => {
@@ -93,9 +130,9 @@ const ChatSidebar = ({ sidebarVisible, formatDate, toggleSidebar }: ChatSidebarP
               {chats.map(chat => (
                 <div
                   key={`chat-${chat.id}-${chat.lastUpdated.toString()}`}
-                  onClick={() => loadSavedChat(chat.id)}
+                  onClick={() => editingChatId !== chat.id && loadSavedChat(chat.id)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+                    if (editingChatId !== chat.id && (e.key === 'Enter' || e.key === ' ')) {
                       loadSavedChat(chat.id);
                     }
                   }}
@@ -108,20 +145,63 @@ const ChatSidebar = ({ sidebarVisible, formatDate, toggleSidebar }: ChatSidebarP
                       : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
                   )}
                 >
-                  <div className="flex items-center space-x-2 truncate">
-                    <MessageSquare size={16} />
-                    <span className="truncate">{chat.title}</span>
+                  <div className="flex items-center space-x-2 truncate flex-1">
+                    <MessageSquare size={16} className="flex-shrink-0" />
+                    {editingChatId === chat.id ? (
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onKeyDown={(e) => handleRenameKeyPress(e, chat.id)}
+                        onBlur={() => handleConfirmRename(chat.id)}
+                        className="flex-1 bg-transparent border-b border-gray-400 dark:border-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="truncate">{chat.title}</span>
+                    )}
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent triggering the parent's onClick
-                      deleteSavedChat(chat.id, e);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-opacity duration-200"
-                    aria-label="Delete chat"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center space-x-1">
+                    {editingChatId === chat.id ? (
+                      <>
+                        <button
+                          onClick={(e) => handleConfirmRename(chat.id, e)}
+                          className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-200 transition-colors duration-200"
+                          aria-label="Confirm rename"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button
+                          onClick={handleCancelRename}
+                          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors duration-200"
+                          aria-label="Cancel rename"
+                        >
+                          <XIcon size={16} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => handleStartRename(chat.id, chat.title, e)}
+                          className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-all duration-200"
+                          aria-label="Rename chat"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteSavedChat(chat.id, e);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-all duration-200"
+                          aria-label="Delete chat"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
