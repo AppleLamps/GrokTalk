@@ -1,24 +1,19 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import bcrypt from 'bcryptjs';
 import { getSupabaseAdmin } from '../../src/lib/supabaseServer';
+import applyCors from '../../src/lib/cors';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  const defaultFrontendUrl = 'https://grok-talk.vercel.app';
-  const allowedOrigins = [process.env.FRONTEND_URL || defaultFrontendUrl, defaultFrontendUrl];
-  const requestOrigin = (req.headers.origin as string) || '';
-  const corsOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : allowedOrigins[0];
+  try {
+    await applyCors(req, res);
+  } catch (error) {
+    console.error('CORS error:', error);
+    return res.status(500).json({ error: 'Failed to apply CORS' });
+  }
 
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Origin', corsOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Max-Age', '86400');
-
+  // If `applyCors` handled the preflight OPTIONS request, we can exit early.
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(204).end();
   }
 
   if (req.method !== 'POST') {
