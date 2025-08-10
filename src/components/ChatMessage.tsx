@@ -208,10 +208,10 @@ const CodeBlock = ({ language, value }: { language: string, value: string }) => 
   };
   
   return (
-    <div className="relative rounded-md overflow-hidden my-4 border border-gray-300 dark:border-gray-700">
+    <div className="relative rounded-md overflow-hidden my-4 border border-gray-300 dark:border-gray-700 group">
       <div className="flex items-center justify-between py-1 px-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
         <span className="font-mono">{language}</span>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           {isPreviewable && (
             <button
               onClick={() => setShowPreview(!showPreview)}
@@ -244,7 +244,7 @@ const CodeBlock = ({ language, value }: { language: string, value: string }) => 
         <div className="border-t border-gray-300 dark:border-gray-700">
           <div className="flex items-center justify-between py-1 px-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
             <span>Output</span>
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <button
                 onClick={runCode}
                 disabled={isRunning}
@@ -447,7 +447,7 @@ const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
   };
   
   return (
-    <div className="w-full py-4 md:py-6 px-4 md:px-6">
+    <div className="w-full py-4 md:py-6 px-4 md:px-6 group">
       <div className={cn(
         "max-w-3xl mx-auto",
         isUser ? "flex justify-end" : "flex items-start space-x-4 md:space-x-6"
@@ -505,8 +505,8 @@ const ChatMessage = ({ message, onRegenerate }: ChatMessageProps) => {
           {/* Render message content */}
           {renderContent()}
           
-          {/* Message actions */}
-          <div className="mt-3 flex items-center gap-2 text-gray-500 dark:text-gray-400">
+          {/* Message actions - only visible on hover */}
+          <div className="mt-3 flex items-center gap-2 text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button 
               onClick={copyToClipboard}
               className="p-1 hover:text-gray-700 dark:hover:text-gray-200 rounded"
