@@ -1,6 +1,6 @@
 import express from 'express';
-import { prisma } from '../../src/lib/db';
 import { getUserFromToken, encryptApiKey, decryptApiKey } from '../../src/lib/auth';
+import { getSupabaseAdmin } from '../../src/lib/supabaseServer';
 
 const router = express.Router();
 
@@ -17,20 +17,14 @@ const authenticateUser = (req: any, res: any, next: any) => {
 // Get all API keys for the authenticated user
 router.get('/', authenticateUser, async (req: any, res) => {
   try {
-    const apiKeys = await prisma.userApiKey.findMany({
-      where: { userId: req.userId },
-      select: {
-        id: true,
-        name: true,
-        provider: true,
-        createdAt: true,
-        updatedAt: true
-        // Note: We don't return the encrypted key for security
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    res.json({ apiKeys });
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('user_api_keys')
+      .select('id, name, provider, created_at, updated_at')
+      .eq('user_id', req.userId)
+      .order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: 'Failed to fetch API keys' });
+    res.json({ apiKeys: data });
   } catch (error) {
     console.error('Get API keys error:', error);
     res.status(500).json({ error: 'Failed to fetch API keys' });
@@ -42,19 +36,20 @@ router.get('/:id', authenticateUser, async (req: any, res) => {
   try {
     const { id } = req.params;
 
-    const apiKey = await prisma.userApiKey.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: apiKey } = await supabase
+      .from('user_api_keys')
+      .select('id, name, provider, encrypted_key, created_at, updated_at')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .maybeSingle();
 
     if (!apiKey) {
       return res.status(404).json({ error: 'API key not found' });
     }
 
     // Decrypt the API key
-    const decryptedKey = decryptApiKey(apiKey.encryptedKey);
+    const decryptedKey = decryptApiKey((apiKey as any).encrypted_key);
 
     res.json({
       id: apiKey.id,
@@ -75,20 +70,22 @@ router.get('/provider/:provider', authenticateUser, async (req: any, res) => {
   try {
     const { provider } = req.params;
 
-    const apiKey = await prisma.userApiKey.findFirst({
-      where: {
-        provider,
-        userId: req.userId
-      },
-      orderBy: { updatedAt: 'desc' } // Get the most recently updated one
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: apiKey } = await supabase
+      .from('user_api_keys')
+      .select('id, name, provider, encrypted_key')
+      .eq('provider', provider)
+      .eq('user_id', req.userId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (!apiKey) {
       return res.status(404).json({ error: 'API key not found for this provider' });
     }
 
     // Decrypt the API key
-    const decryptedKey = decryptApiKey(apiKey.encryptedKey);
+    const decryptedKey = decryptApiKey((apiKey as any).encrypted_key);
 
     res.json({
       id: apiKey.id,
@@ -116,21 +113,13 @@ router.post('/', authenticateUser, async (req: any, res) => {
     // Encrypt the API key
     const encryptedKey = encryptApiKey(apiKey);
 
-    const newApiKey = await prisma.userApiKey.create({
-      data: {
-        name,
-        encryptedKey,
-        provider,
-        userId: req.userId
-      },
-      select: {
-        id: true,
-        name: true,
-        provider: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: newApiKey, error } = await supabase
+      .from('user_api_keys')
+      .insert({ name, provider, encrypted_key: encryptedKey, user_id: req.userId })
+      .select('id, name, provider, created_at, updated_at')
+      .single();
+    if (error) return res.status(500).json({ error: 'Failed to create API key' });
 
     res.status(201).json({
       message: 'API key created successfully',
@@ -149,12 +138,13 @@ router.put('/:id', authenticateUser, async (req: any, res) => {
     const { name, apiKey, provider } = req.body;
 
     // Check if API key exists and belongs to user
-    const existingApiKey = await prisma.userApiKey.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: existingApiKey } = await supabase
+      .from('user_api_keys')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .maybeSingle();
 
     if (!existingApiKey) {
       return res.status(404).json({ error: 'API key not found' });
@@ -167,17 +157,15 @@ router.put('/:id', authenticateUser, async (req: any, res) => {
       updateData.encryptedKey = encryptApiKey(apiKey);
     }
 
-    const updatedApiKey = await prisma.userApiKey.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        provider: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: updatedApiKey, error } = await supabase
+      .from('user_api_keys')
+      .update(updateData)
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .select('id, name, provider, created_at, updated_at')
+      .single();
+    if (error) return res.status(500).json({ error: 'Failed to update API key' });
 
     res.json({
       message: 'API key updated successfully',
@@ -195,20 +183,23 @@ router.delete('/:id', authenticateUser, async (req: any, res) => {
     const { id } = req.params;
 
     // Check if API key exists and belongs to user
-    const existingApiKey = await prisma.userApiKey.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: existingApiKey } = await supabase
+      .from('user_api_keys')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .maybeSingle();
 
     if (!existingApiKey) {
       return res.status(404).json({ error: 'API key not found' });
     }
 
-    await prisma.userApiKey.delete({
-      where: { id }
-    });
+    await supabase
+      .from('user_api_keys')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', req.userId);
 
     res.json({ message: 'API key deleted successfully' });
   } catch (error) {

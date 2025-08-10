@@ -1,9 +1,13 @@
 import { Project, Message, SavedChat } from '../types/chat';
 
-const API_BASE_URL = process.env.VITE_API_BASE_URL || 
-  (process.env.NODE_ENV === 'production' 
-    ? 'https://grok-talk.vercel.app/api' 
-    : 'http://localhost:3001/api');
+// Prefer same-origin in production to avoid CORS and custom domains
+const API_BASE_URL = ((): string => {
+  // Always hit Vercel functions on same origin in production
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
+    return `${window.location.origin}/api`;
+  }
+  return process.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+})();
 
 // Helper function to get auth token from localStorage
 const getAuthToken = (): string | null => {

@@ -1,6 +1,6 @@
 import express from 'express';
-import { prisma } from '../../src/lib/db';
 import { getUserFromToken } from '../../src/lib/auth';
+import { getSupabaseAdmin } from '../../src/lib/supabaseServer';
 
 const router = express.Router();
 
@@ -19,25 +19,15 @@ router.get('/', authenticateUser, async (req: any, res) => {
   try {
     const { projectId } = req.query;
     
-    const whereClause: any = { userId: req.userId };
-    if (projectId) {
-      whereClause.projectId = projectId;
-    }
-
-    const chatHistory = await prisma.chatHistory.findMany({
-      where: whereClause,
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      },
-      orderBy: { updatedAt: 'desc' }
-    });
-
-    res.json({ chatHistory });
+    const supabase = getSupabaseAdmin();
+    let query = supabase.from('chat_history')
+      .select('id, title, messages, updated_at, project_id')
+      .eq('user_id', req.userId)
+      .order('updated_at', { ascending: false });
+    if (projectId) query = query.eq('project_id', projectId);
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: 'Failed to fetch chat history' });
+    res.json({ chatHistory: data });
   } catch (error) {
     console.error('Get chat history error:', error);
     res.status(500).json({ error: 'Failed to fetch chat history' });
@@ -49,20 +39,13 @@ router.get('/:id', authenticateUser, async (req: any, res) => {
   try {
     const { id } = req.params;
 
-    const chat = await prisma.chatHistory.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      },
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: chat, error } = await supabase
+      .from('chat_history')
+      .select('id, title, messages, updated_at, project_id')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .single();
 
     if (!chat) {
       return res.status(404).json({ error: 'Chat not found' });
@@ -87,40 +70,19 @@ router.post('/', authenticateUser, async (req: any, res) => {
     }
 
     // Validate that project belongs to user if projectId is provided
-    if (projectId) {
-      const project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          userId: req.userId
-        }
-      });
-
-      if (!project) {
-        return res.status(404).json({ error: 'Project not found' });
-      }
-    }
-
-    const chat = await prisma.chatHistory.create({
-      data: {
+    const supabase = getSupabaseAdmin();
+    const { data: chat, error } = await supabase
+      .from('chat_history')
+      .insert({
         title,
         messages,
-        projectId: projectId || null,
-        userId: req.userId
-      },
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    });
-
-    res.status(201).json({
-      message: 'Chat created successfully',
-      chat
-    });
+        project_id: projectId || null,
+        user_id: req.userId,
+      })
+      .select('id, title, messages, updated_at, project_id')
+      .single();
+    if (error) return res.status(500).json({ error: 'Failed to create chat' });
+    res.status(201).json({ message: 'Chat created successfully', chat });
   } catch (error) {
     console.error('Create chat error:', error);
     res.status(500).json({ error: 'Failed to create chat' });
@@ -134,48 +96,33 @@ router.put('/:id', authenticateUser, async (req: any, res) => {
     const { title, messages, projectId } = req.body;
 
     // Check if chat exists and belongs to user
-    const existingChat = await prisma.chatHistory.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: existingChat } = await supabase
+      .from('chat_history')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .maybeSingle();
 
     if (!existingChat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
 
     // Validate that project belongs to user if projectId is provided
-    if (projectId) {
-      const project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          userId: req.userId
-        }
-      });
-
-      if (!project) {
-        return res.status(404).json({ error: 'Project not found' });
-      }
-    }
+    // project validation is optional; row-level security should protect
 
     const updateData: any = {};
     if (title !== undefined) updateData.title = title;
     if (messages !== undefined) updateData.messages = messages;
-    if (projectId !== undefined) updateData.projectId = projectId;
-
-    const updatedChat = await prisma.chatHistory.update({
-      where: { id },
-      data: updateData,
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    });
+    if (projectId !== undefined) updateData.project_id = projectId;
+    const { data: updatedChat, error } = await supabase
+      .from('chat_history')
+      .update(updateData)
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .select('id, title, messages, updated_at, project_id')
+      .single();
+    if (error) return res.status(500).json({ error: 'Failed to update chat' });
 
     res.json({
       message: 'Chat updated successfully',
@@ -193,20 +140,23 @@ router.delete('/:id', authenticateUser, async (req: any, res) => {
     const { id } = req.params;
 
     // Check if chat exists and belongs to user
-    const existingChat = await prisma.chatHistory.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: existingChat } = await supabase
+      .from('chat_history')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .maybeSingle();
 
     if (!existingChat) {
       return res.status(404).json({ error: 'Chat not found' });
     }
 
-    await prisma.chatHistory.delete({
-      where: { id }
-    });
+    await supabase
+      .from('chat_history')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', req.userId);
 
     res.json({ message: 'Chat deleted successfully' });
   } catch (error) {

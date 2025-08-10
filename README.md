@@ -226,4 +226,4 @@ If you encounter any issues or have questions, please:
 - [Supabase](https://supabase.com/) for database and backend services
 - [Radix UI](https://www.radix-ui.com/) for accessible components
 - [Tailwind CSS](https://tailwindcss.com/) for styling
-- [Prisma](https://www.prisma.io/) for database ORM
+- Supabase (Auth, Postgres, Storage) — no Prisma

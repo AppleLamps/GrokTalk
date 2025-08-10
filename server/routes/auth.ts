@@ -1,6 +1,7 @@
 import express from 'express';
-import { prisma } from '../../src/lib/db';
-import { hashPassword, verifyPassword, generateToken, getUserFromToken } from '../../src/lib/auth';
+import { getSupabaseAdmin } from '../../src/lib/supabaseServer';
+import { hashPassword, verifyPassword, generateToken } from '../../src/lib/auth';
+import { getSupabaseAdmin } from '../../src/lib/supabaseServer';
 
 const router = express.Router();
 
@@ -13,35 +14,25 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { name: name || null }
     });
-
-    if (existingUser) {
-      return res.status(409).json({ error: 'User already exists with this email' });
+    if (error || !data?.user) {
+      return res.status(400).json({ error: error?.message || 'Failed to create user' });
     }
-
-    // Hash password and create user
-    const hashedPassword = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name: name || null
-      }
-    });
-
-    // Generate token
-    const token = generateToken(user.id);
+    const token = generateToken(data.user.id);
 
     res.status(201).json({
       message: 'User created successfully',
       token,
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name
+          id: data.user.id,
+          email: data.user.email,
+          name: (data.user.user_metadata as any)?.name || null
       }
     });
   } catch (error) {
@@ -59,31 +50,18 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Verify password
-    const isValidPassword = await verifyPassword(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Generate token
-    const token = generateToken(user.id);
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data?.user) return res.status(401).json({ error: 'Invalid credentials' });
+    const token = generateToken(data.user.id);
 
     res.json({
       message: 'Login successful',
       token,
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name
+          id: data.user.id,
+          email: data.user.email,
+          name: (data.user.user_metadata as any)?.name || null
       }
     });
   } catch (error) {
@@ -95,26 +73,14 @@ router.post('/login', async (req, res) => {
 // Get current user profile
 router.get('/me', async (req, res) => {
   try {
-    const userInfo = getUserFromToken(req.headers.authorization);
-    if (!userInfo) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userInfo.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true
-      }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({ user });
+    const supabase = getSupabaseAdmin();
+    const authHeader = req.headers.authorization as string | undefined;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+    const token = authHeader.substring(7);
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return res.status(401).json({ error: 'Unauthorized' });
+    const u = data.user;
+    res.json({ user: { id: u.id, email: u.email, name: (u.user_metadata as any)?.name || null, createdAt: u.created_at } });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user information' });
@@ -124,45 +90,21 @@ router.get('/me', async (req, res) => {
 // Update user profile
 router.put('/profile', async (req, res) => {
   try {
-    const userInfo = getUserFromToken(req.headers.authorization);
-    if (!userInfo) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
+    const supabase = getSupabaseAdmin();
+    const authHeader = req.headers.authorization as string | undefined;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
+    const token = authHeader.substring(7);
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+    if (userErr || !userData?.user) return res.status(401).json({ error: 'Unauthorized' });
     const { name, email } = req.body;
-    const updateData: any = {};
 
-    if (name !== undefined) updateData.name = name;
-    if (email !== undefined) {
-      // Check if email is already taken by another user
-      const existingUser = await prisma.user.findFirst({
-        where: {
-          email,
-          id: { not: userInfo.userId }
-        }
-      });
-
-      if (existingUser) {
-        return res.status(409).json({ error: 'Email already taken' });
-      }
-      updateData.email = email;
-    }
-
-    const updatedUser = await prisma.user.update({
-      where: { id: userInfo.userId },
-      data: updateData,
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        updatedAt: true
-      }
-    });
-
-    res.json({
-      message: 'Profile updated successfully',
-      user: updatedUser
-    });
+    // Update metadata and optionally email
+    const updates: any = { data: { name } };
+    if (email) updates.email = email;
+    const { data, error } = await supabase.auth.admin.updateUserById(userData.user.id, updates);
+    if (error || !data?.user) return res.status(500).json({ error: 'Failed to update profile' });
+    const u = data.user;
+    res.json({ message: 'Profile updated successfully', user: { id: u.id, email: u.email, name: (u.user_metadata as any)?.name || null, updatedAt: u.updated_at } });
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });

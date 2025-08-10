@@ -4,26 +4,25 @@ This guide will help you complete the setup of your GrokTalk application with da
 
 ## 🚀 Quick Start
 
-### 1. Database Setup (Vercel Postgres)
+### 1. Database Setup (Supabase)
 
-1. **Create Vercel Postgres Database**:
-   - Go to [Vercel Dashboard](https://vercel.com/dashboard)
-   - Navigate to your project or create a new one
-   - Go to "Storage" tab → "Create Database" → "Postgres"
-   - Choose a name (e.g., `groktalk-db`) and region
+1. **Create Supabase Project**:
+   - Go to `https://app.supabase.com`
+   - Create a new project (e.g., `groktalk-db`)
+   - Choose region close to Vercel deployment
 
-2. **Get Connection String**:
-   - Copy the connection string from your database settings
-   - It should look like: `postgresql://username:password@host:port/database?sslmode=require`
+2. **Get Supabase Keys**:
+   - From Project Settings → API: copy Project URL, anon key, and service role key
 
 3. **Update Environment Variables**:
-   ```bash
-   # Update your .env file
-   DATABASE_URL="your-vercel-postgres-connection-string"
-   JWT_SECRET="your-secure-jwt-secret-32-chars-min"
-   ENCRYPTION_KEY="your-32-character-encryption-key-here"
-   NEXTAUTH_SECRET="your-nextauth-secret-here"
-   NEXTAUTH_URL="http://localhost:3000"
+    
+    ```bash
+    # Update your .env file
+    POSTGRES_SUPABASE_URL="https://YOUR-PROJECT.supabase.co"
+    POSTGRES_NEXT_PUBLIC_SUPABASE_ANON_KEY="YOUR-ANON-KEY"
+    POSTGRES_SUPABASE_SERVICE_ROLE_KEY="YOUR-SERVICE-ROLE-KEY"
+    JWT_SECRET="your-secure-jwt-secret-32-chars-min"
+    ENCRYPTION_KEY="your-32-character-encryption-key-here"
    ```
 
 4. **Generate Secure Keys**:
@@ -35,17 +34,63 @@ This guide will help you complete the setup of your GrokTalk application with da
    node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
    ```
 
-### 2. Database Migration
+### 2. Database Schema
 
-```bash
-# Generate Prisma client
-npm run db:generate
+Use Supabase SQL editor to create tables matching:
 
-# Push schema to database (creates tables)
-npm run db:push
+```sql
+-- users are managed by Supabase Auth
 
-# Verify database setup
-npm run db:studio
+create table if not exists public.projects (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  description text not null,
+  instructions text not null,
+  conversation_starters text[] default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.chat_history (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  project_id uuid references public.projects(id) on delete set null,
+  title text not null,
+  messages jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.user_api_keys (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  provider text not null,
+  encrypted_key text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- RLS policies
+alter table public.projects enable row level security;
+alter table public.chat_history enable row level security;
+alter table public.user_api_keys enable row level security;
+
+create policy "projects select" on public.projects for select using (auth.uid() = user_id);
+create policy "projects ins" on public.projects for insert with check (auth.uid() = user_id);
+create policy "projects upd" on public.projects for update using (auth.uid() = user_id);
+create policy "projects del" on public.projects for delete using (auth.uid() = user_id);
+
+create policy "chat select" on public.chat_history for select using (auth.uid() = user_id);
+create policy "chat ins" on public.chat_history for insert with check (auth.uid() = user_id);
+create policy "chat upd" on public.chat_history for update using (auth.uid() = user_id);
+create policy "chat del" on public.chat_history for delete using (auth.uid() = user_id);
+
+create policy "keys select" on public.user_api_keys for select using (auth.uid() = user_id);
+create policy "keys ins" on public.user_api_keys for insert with check (auth.uid() = user_id);
+create policy "keys upd" on public.user_api_keys for update using (auth.uid() = user_id);
+create policy "keys del" on public.user_api_keys for delete using (auth.uid() = user_id);
 ```
 
 ### 3. Start the Application

@@ -1,53 +1,33 @@
 // Simple database connection test script
 // Run with: node test-db.js
 
-const { PrismaClient } = require('@prisma/client');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 async function testDatabaseConnection() {
-  const prisma = new PrismaClient();
-  
+  const url = process.env.POSTGRES_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRole = process.env.POSTGRES_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabase = createClient(url, serviceRole);
+
   try {
-    console.log('🔍 Testing database connection...');
-    
-    // Test basic connection
-    await prisma.$connect();
-    console.log('✅ Database connection successful!');
-    
-    // Test if tables exist by trying to count records
-    const userCount = await prisma.user.count();
-    const projectCount = await prisma.project.count();
-    const chatCount = await prisma.chatHistory.count();
-    const apiKeyCount = await prisma.userApiKey.count();
-    
+    console.log('🔍 Testing Supabase connection...');
+    // Ping a table
+    const { error: pingError } = await supabase.from('projects').select('id').limit(1);
+    if (pingError) throw pingError;
+
+    const { count: projectCount } = await supabase.from('projects').select('*', { count: 'exact', head: true });
+    const { count: chatCount } = await supabase.from('chat_history').select('*', { count: 'exact', head: true });
+    const { count: apiKeyCount } = await supabase.from('user_api_keys').select('*', { count: 'exact', head: true });
+
     console.log('📊 Database Statistics:');
-    console.log(`   Users: ${userCount}`);
-    console.log(`   Projects: ${projectCount}`);
-    console.log(`   Chat History: ${chatCount}`);
-    console.log(`   API Keys: ${apiKeyCount}`);
-    
-    console.log('\n🎉 Database setup is working correctly!');
-    console.log('\n📝 Next steps:');
-    console.log('   1. Start the frontend: npm run dev');
-    console.log('   2. Start the API server: npm run server:dev');
-    console.log('   3. Open http://localhost:8081 in your browser');
-    console.log('   4. Register a new account to test the system');
-    
+    console.log(`   Projects: ${projectCount ?? 0}`);
+    console.log(`   Chat History: ${chatCount ?? 0}`);
+    console.log(`   API Keys: ${apiKeyCount ?? 0}`);
+
+    console.log('\n🎉 Supabase setup is working correctly!');
   } catch (error) {
-    console.error('❌ Database connection failed:');
+    console.error('❌ Supabase connection failed:');
     console.error(error.message);
-    
-    if (error.code === 'P1001') {
-      console.log('\n🔧 Troubleshooting:');
-      console.log('   1. Check your DATABASE_URL in .env file');
-      console.log('   2. Ensure your Vercel Postgres database is running');
-      console.log('   3. Verify the connection string format');
-      console.log('   4. Run: npm run db:push to create tables');
-    } else if (error.code === 'P2021') {
-      console.log('\n🔧 Tables not found. Run: npm run db:push');
-    }
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -56,10 +36,9 @@ function checkEnvironmentVariables() {
   console.log('🔍 Checking environment variables...');
   
   const required = [
-    'DATABASE_URL',
-    'JWT_SECRET',
-    'ENCRYPTION_KEY',
-    'NEXTAUTH_SECRET'
+    'POSTGRES_SUPABASE_URL',
+    'POSTGRES_NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'POSTGRES_SUPABASE_SERVICE_ROLE_KEY'
   ];
   
   const missing = required.filter(key => !process.env[key]);

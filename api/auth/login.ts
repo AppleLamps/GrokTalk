@@ -1,14 +1,20 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { prisma } from '../../src/lib/db';
+import { getSupabaseAdmin } from '../../src/lib/supabaseServer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', 'https://grok-talk.vercel.app');
+  const defaultFrontendUrl = 'https://grok-talk.vercel.app';
+  const allowedOrigins = [process.env.FRONTEND_URL || defaultFrontendUrl, defaultFrontendUrl];
+  const requestOrigin = (req.headers.origin as string) || '';
+  const corsOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : allowedOrigins[0];
+
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Origin', corsOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -26,35 +32,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email }
+    // Sign in via Supabase Auth with password
+    const supabase = getSupabaseAdmin();
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
 
-    if (!user) {
+    if (signInError || !signInData?.session || !signInData.user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: '7d' }
-    );
 
     res.json({
       message: 'Login successful',
-      token,
+      token: signInData.session.access_token,
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name
+        id: signInData.user.id,
+        email: signInData.user.email,
+        name: (signInData.user.user_metadata as any)?.name || null,
       }
     });
   } catch (error) {

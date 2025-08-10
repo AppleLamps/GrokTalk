@@ -1,6 +1,6 @@
 import express from 'express';
-import { prisma } from '../../src/lib/db';
 import { getUserFromToken } from '../../src/lib/auth';
+import { getSupabaseAdmin } from '../../src/lib/supabaseServer';
 
 const router = express.Router();
 
@@ -17,12 +17,14 @@ const authenticateUser = (req: any, res: any, next: any) => {
 // Get all projects for the authenticated user
 router.get('/', authenticateUser, async (req: any, res) => {
   try {
-    const projects = await prisma.project.findMany({
-      where: { userId: req.userId },
-      orderBy: { updatedAt: 'desc' }
-    });
-
-    res.json({ projects });
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, description, instructions, conversation_starters, created_at, updated_at')
+      .eq('user_id', req.userId)
+      .order('updated_at', { ascending: false });
+    if (error) return res.status(500).json({ error: 'Failed to fetch projects' });
+    res.json({ projects: data });
   } catch (error) {
     console.error('Get projects error:', error);
     res.status(500).json({ error: 'Failed to fetch projects' });
@@ -34,12 +36,13 @@ router.get('/:id', authenticateUser, async (req: any, res) => {
   try {
     const { id } = req.params;
 
-    const project = await prisma.project.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: project, error } = await supabase
+      .from('projects')
+      .select('id, name, description, instructions, conversation_starters, created_at, updated_at')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .single();
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
@@ -63,15 +66,19 @@ router.post('/', authenticateUser, async (req: any, res) => {
       });
     }
 
-    const project = await prisma.project.create({
-      data: {
+    const supabase = getSupabaseAdmin();
+    const { data: project, error } = await supabase
+      .from('projects')
+      .insert({
         name,
         description,
         instructions,
-        conversationStarters: conversationStarters || [],
-        userId: req.userId
-      }
-    });
+        conversation_starters: conversationStarters || [],
+        user_id: req.userId,
+      })
+      .select('id, name, description, instructions, conversation_starters, created_at, updated_at')
+      .single();
+    if (error) return res.status(500).json({ error: 'Failed to create project' });
 
     res.status(201).json({
       message: 'Project created successfully',
@@ -90,12 +97,13 @@ router.put('/:id', authenticateUser, async (req: any, res) => {
     const { name, description, instructions, conversationStarters } = req.body;
 
     // Check if project exists and belongs to user
-    const existingProject = await prisma.project.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: existingProject } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .maybeSingle();
 
     if (!existingProject) {
       return res.status(404).json({ error: 'Project not found' });
@@ -105,12 +113,16 @@ router.put('/:id', authenticateUser, async (req: any, res) => {
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
     if (instructions !== undefined) updateData.instructions = instructions;
-    if (conversationStarters !== undefined) updateData.conversationStarters = conversationStarters;
+    if (conversationStarters !== undefined) updateData.conversation_starters = conversationStarters;
 
-    const updatedProject = await prisma.project.update({
-      where: { id },
-      data: updateData
-    });
+    const { data: updatedProject, error } = await supabase
+      .from('projects')
+      .update(updateData)
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .select('id, name, description, instructions, conversation_starters, created_at, updated_at')
+      .single();
+    if (error) return res.status(500).json({ error: 'Failed to update project' });
 
     res.json({
       message: 'Project updated successfully',
@@ -128,20 +140,23 @@ router.delete('/:id', authenticateUser, async (req: any, res) => {
     const { id } = req.params;
 
     // Check if project exists and belongs to user
-    const existingProject = await prisma.project.findFirst({
-      where: {
-        id,
-        userId: req.userId
-      }
-    });
+    const supabase = getSupabaseAdmin();
+    const { data: existingProject } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', req.userId)
+      .maybeSingle();
 
     if (!existingProject) {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    await prisma.project.delete({
-      where: { id }
-    });
+    await supabase
+      .from('projects')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', req.userId);
 
     res.json({ message: 'Project deleted successfully' });
   } catch (error) {

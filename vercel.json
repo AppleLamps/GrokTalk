@@ -15,12 +15,48 @@
       "dest": "/api/health.ts"
     },
     {
+      "src": "/api/chat",
+      "dest": "/api/chat/index.ts"
+    },
+    {
+      "src": "/api/chat/(?<id>[^/]+)$",
+      "dest": "/api/chat/[id].ts"
+    },
+    {
       "src": "/api/auth/register",
       "dest": "/api/auth/register.ts"
     },
     {
       "src": "/api/auth/login",
       "dest": "/api/auth/login.ts"
+    },
+    {
+      "src": "/api/auth/me",
+      "dest": "/api/auth/me.ts"
+    },
+    {
+      "src": "/api/auth/profile",
+      "dest": "/api/auth/profile.ts"
+    },
+    {
+      "src": "/api/projects",
+      "dest": "/api/projects/index.ts"
+    },
+    {
+      "src": "/api/projects/(?<id>[^/]+)$",
+      "dest": "/api/projects/[id].ts"
+    },
+    {
+      "src": "/api/api-keys$",
+      "dest": "/api/api-keys/index.ts"
+    },
+    {
+      "src": "/api/api-keys/provider/(?<provider>[^/]+)$",
+      "dest": "/api/api-keys/provider/[provider].ts"
+    },
+    {
+      "src": "/api/api-keys/(?<id>[^/]+)$",
+      "dest": "/api/api-keys/[id].ts"
     },
     {
       "src": "/(.*)",
