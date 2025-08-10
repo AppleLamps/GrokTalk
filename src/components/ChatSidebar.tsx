@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, MessageSquare, Trash2, Settings, X, Menu, FolderKanban, Edit2, Check, X as XIcon } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Settings, Menu, FolderKanban, Edit2, Check, X as XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ThemeToggle from './ThemeToggle';
 import { useChatContext } from '@/contexts/ChatContext';
@@ -87,24 +87,17 @@ const ChatSidebar = ({ sidebarVisible, formatDate, toggleSidebar }: ChatSidebarP
     <div className={cn(
       "h-full flex flex-col border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900",
       "transition-all duration-300 ease-in-out",
+      "md:pt-0 pt-16", // Add top padding on mobile to account for header
       !sidebarVisible && "md:opacity-0 md:w-0 md:overflow-hidden"
     )}>
       {/* New Chat Button */}
-      <div className="p-4 flex items-center justify-between">
+      <div className="p-4">
         <button
           onClick={handleStartNewChat}
-          className="flex items-center justify-center flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-500 hover:bg-green-600 rounded-full shadow-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50"
+          className="flex items-center justify-center w-full px-4 py-2.5 text-sm font-medium text-white bg-green-500 hover:bg-green-600 rounded-full shadow-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50"
         >
           <Plus size={16} className="mr-2" />
           New chat
-        </button>
-        {/* Close button - visible on all views */}
-        <button
-          onClick={toggleSidebar}
-          className="ml-2 p-2 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md transition-colors duration-150"
-          aria-label="Close sidebar"
-        >
-          <X size={20} />
         </button>
       </div>
 
@@ -222,15 +215,27 @@ const ChatSidebar = ({ sidebarVisible, formatDate, toggleSidebar }: ChatSidebarP
         </div>
       </div>
 
-      {/* Mobile toggle button - for small screens only when sidebar is closed */}
+      {/* Mobile buttons - for small screens only when sidebar is closed */}
       {!sidebarVisible && (
-        <button
-          onClick={toggleSidebar}
-          className="fixed bottom-4 left-4 z-50 p-3 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg transition-all duration-200 ease-in-out md:hidden transform hover:scale-105"
-          aria-label="Open sidebar"
-        >
-          <Menu size={24} />
-        </button>
+        <>
+          {/* New Chat Button */}
+          <button
+            onClick={handleStartNewChat}
+            className="fixed bottom-20 left-4 z-50 p-3 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg transition-all duration-200 ease-in-out md:hidden transform hover:scale-105"
+            aria-label="New chat"
+          >
+            <Plus size={24} />
+          </button>
+          
+          {/* Sidebar Toggle Button */}
+          <button
+            onClick={toggleSidebar}
+            className="fixed bottom-4 left-4 z-50 p-3 bg-gray-600 hover:bg-gray-700 text-white rounded-full shadow-lg transition-all duration-200 ease-in-out md:hidden transform hover:scale-105"
+            aria-label="Open sidebar"
+          >
+            <Menu size={24} />
+          </button>
+        </>
       )}
     </div>
   );
