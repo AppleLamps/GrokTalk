@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and account management
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // Hashed password
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  apiKeys     UserApiKey[]
+  projects    Project[]
+  chatHistory ChatHistory[]
+
+  @@map("users")
+}
+
+// Model for securely storing user API keys
+model UserApiKey {
+  id          String   @id @default(cuid())
+  name        String   // User-friendly name for the API key
+  encryptedKey String  // Encrypted API key
+  provider    String   // e.g., "openai", "anthropic", "x-ai"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_api_keys")
+}
+
+// Project model for storing project metadata
+model Project {
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String
+  instructions         String   @db.Text
+  conversationStarters String[] // Array of conversation starter strings
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  userId               String
+
+  // Relations
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatHistory ChatHistory[]
+
+  @@map("projects")
+}
+
+// Chat history model for storing conversations
+model ChatHistory {
+  id        String   @id @default(cuid())
+  title     String
+  messages  Json     // Store messages as JSON
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  projectId String?
+
+  // Relations
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("chat_history")
+}

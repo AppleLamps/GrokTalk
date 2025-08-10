@@ -30,6 +30,35 @@ export interface MessageRequestInterface {
   stream?: boolean;
 }
 
+// Message interface for chat functionality
+export interface Message {
+  id: string;
+  role: MessageRole;
+  content: MessageContent;
+  timestamp: Date;
+  fileContents?: string;
+  fileNames?: string[];
+}
+
+// Project interface
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// SavedChat interface
+export interface SavedChat {
+  id: string;
+  title: string;
+  messages: Message[];
+  lastUpdated: Date;
+  projectId?: string;
+}
+
 // Types for model selection
 // OpenRouter model slugs
 export type ModelType =
@@ -53,4 +82,4 @@ export interface GPT4VisionPayload {
   max_tokens: number;
   temperature: number;
   stream: boolean;
-} 
+}

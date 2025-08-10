@@ -3,6 +3,7 @@ import { FileDown, Sparkles, ChevronDown, Menu, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useChatContext } from '@/contexts/ChatContext';
+import { UserProfile } from './UserProfile';
 import html2pdf from 'html2pdf.js';
 
 interface ChatHeaderProps {
@@ -203,9 +204,12 @@ const ChatHeader = ({ toggleSidebar }: ChatHeaderProps) => {
         >
           <FileDown size={18} />
         </button>
+        
+        {/* User Profile */}
+        <UserProfile />
       </div>
     </div>
   );
 };
 
-export default ChatHeader; 
+export default ChatHeader;

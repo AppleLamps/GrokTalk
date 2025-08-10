@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback, useMemo } from 'react';
 import { xaiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { chatAPI, migrationAPI } from "@/services/database";
 import { ProcessedFile } from "@/components/FileUploader";
 import { GPT4VisionPayload, MessageInterface, MessageRequestInterface, ModelType } from "@/types/chat";
 
@@ -47,6 +49,7 @@ interface ChatContextType {
   setCurrentChatId: React.Dispatch<React.SetStateAction<string | null>>;
   savedChats: SavedChat[];
   setSavedChats: React.Dispatch<React.SetStateAction<SavedChat[]>>;
+  isLoading: boolean;
   addWelcomeMessage: () => void;
   handleSendMessage: (
     content: string,
@@ -68,12 +71,13 @@ interface ChatContextType {
   messagesEndRef: React.RefObject<HTMLDivElement>;
   messagesContainerRef: React.RefObject<HTMLDivElement>;
   regenerateMessage: (messageId: string) => void;
+  refreshChats: () => Promise<void>;
 }
 
 // Create context
 export const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
-// Storage keys for consistency
+// Storage keys for migration purposes only
 const STORAGE_KEYS = {
   MESSAGES: "chatMessages",
   SAVED_CHATS: "savedChats",
@@ -86,14 +90,6 @@ const generateId = (prefix: string = ''): string => {
   const timestamp = Date.now();
   const randomStr = Math.random().toString(36).substring(2, 8);
   return `${prefix}${timestamp}-${randomStr}`;
-};
-
-const storeInLocalStorage = <T,>(key: string, value: T): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Error storing ${key} in localStorage:`, error);
-  }
 };
 
 const retrieveFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
@@ -122,18 +118,16 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
   maxTokens,
   currentModel
 }) => {
+  const { isAuthenticated, user } = useAuth();
+  const { toast } = useToast();
+  
   // State
-  const [messages, setMessages] = useState<Message[]>(() =>
-    retrieveFromLocalStorage<Message[]>(STORAGE_KEYS.MESSAGES, [])
-  );
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<Message | null>(null);
-  const [currentChatId, setCurrentChatId] = useState<string | null>(() =>
-    localStorage.getItem(STORAGE_KEYS.CURRENT_CHAT_ID)
-  );
-  const [savedChats, setSavedChats] = useState<SavedChat[]>(() =>
-    retrieveFromLocalStorage<SavedChat[]>(STORAGE_KEYS.SAVED_CHATS, [])
-  );
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [savedChats, setSavedChats] = useState<SavedChat[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Refs
   const streamingContentRef = useRef<string>("");
@@ -141,7 +135,90 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const { toast } = useToast();
+  // Load chats from database
+  const loadChatsFromDatabase = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      setIsLoading(true);
+      const chats = await chatAPI.getAll();
+      
+      // Convert database format to local format
+      const convertedChats: SavedChat[] = chats.map(chat => ({
+        id: chat.id,
+        title: chat.title,
+        messages: JSON.parse(chat.messages),
+        lastUpdated: new Date(chat.updatedAt)
+      }));
+      
+      setSavedChats(convertedChats);
+    } catch (error) {
+      console.error('Failed to load chats from database:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat history from database.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Migrate existing localStorage chats to database
+  const migrateChatsToDatabase = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      const localChats = retrieveFromLocalStorage<SavedChat[]>(STORAGE_KEYS.SAVED_CHATS, []);
+      const localMessages = retrieveFromLocalStorage<Message[]>(STORAGE_KEYS.MESSAGES, []);
+      
+      if (localChats.length > 0 || localMessages.length > 0) {
+        await migrationAPI.migrateChats({
+          savedChats: localChats,
+          currentMessages: localMessages,
+          currentChatId: localStorage.getItem(STORAGE_KEYS.CURRENT_CHAT_ID)
+        });
+        
+        // Clear localStorage after successful migration
+        localStorage.removeItem(STORAGE_KEYS.SAVED_CHATS);
+        localStorage.removeItem(STORAGE_KEYS.MESSAGES);
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_CHAT_ID);
+        
+        toast({
+          title: "Migration Complete",
+          description: "Your chat history has been migrated to the database."
+        });
+      }
+    } catch (error) {
+      console.error('Failed to migrate chats:', error);
+      toast({
+        title: "Migration Failed",
+        description: "Failed to migrate chat history. Your local data is preserved.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Refresh chats from database
+  const refreshChats = async () => {
+    await loadChatsFromDatabase();
+  };
+
+  // Load data when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      // First try to migrate any existing localStorage data
+      migrateChatsToDatabase().then(() => {
+        // Then load from database
+        loadChatsFromDatabase();
+      });
+    } else {
+      // Clear state when not authenticated
+      setMessages([]);
+      setSavedChats([]);
+      setCurrentChatId(null);
+    }
+  }, [isAuthenticated]);
 
   // Reset isProcessing on page visibility changes (if browser tab is switched/hidden)
   useEffect(() => {
@@ -202,68 +279,24 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
     };
   }, [isProcessing]);
 
-  // Load data from localStorage on mount
+  // Initialize welcome message when no chats are loaded
   useEffect(() => {
-    const savedMessages = retrieveFromLocalStorage<Message[]>(STORAGE_KEYS.MESSAGES, []);
-    const savedChatsData = retrieveFromLocalStorage<SavedChat[]>(STORAGE_KEYS.SAVED_CHATS, []);
-    const currentChatIdData = localStorage.getItem(STORAGE_KEYS.CURRENT_CHAT_ID);
-
-    // Set saved chats
-    if (savedChatsData.length > 0) {
-      setSavedChats(savedChatsData);
-    }
-
-    // Set current chat ID
-    if (currentChatIdData) {
-      setCurrentChatId(currentChatIdData);
-    }
-
-    // Normalize any legacy Grok greeting in stored messages
-    const normalizeGreeting = (msgs: Message[]): Message[] => {
-      const oldText = "Hello! I'm Grok, your AI assistant. How can I help you today?";
-      const newText = "Hello! I'm your AI assistant. How can I help you today?";
-      let changed = false;
-      const mapped = msgs.map(m => {
-        if (m.role === 'assistant' && typeof m.content === 'string' && m.content.trim() === oldText) {
-          changed = true;
-          return { ...m, content: newText };
-        }
-        return m;
-      });
-      if (changed) {
-        try { storeInLocalStorage(STORAGE_KEYS.MESSAGES, mapped); } catch {}
-      }
-      return mapped;
-    };
-
-    // Set messages or add welcome message
-    if (savedMessages.length > 0) {
-      setMessages(normalizeGreeting(savedMessages));
-
-      // Generate new chat ID if needed
-      if (!currentChatIdData && savedMessages.length > 1) {
-        const newId = generateId('chat-');
-        setCurrentChatId(newId);
-        localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, newId);
-      }
-    } else {
+    if (isAuthenticated && savedChats.length === 0 && messages.length === 0 && !isLoading) {
       addWelcomeMessage();
     }
-  }, []);
+  }, [isAuthenticated, savedChats.length, messages.length, isLoading]);
 
-  // Save messages to localStorage
+  // Auto-save current chat when messages change
   useEffect(() => {
-    if (messages.length > 0) {
-      storeInLocalStorage(STORAGE_KEYS.MESSAGES, messages);
+    if (isAuthenticated && messages.length > 1 && currentChatId) {
+      // Debounce the save operation
+      const timeoutId = setTimeout(() => {
+        saveCurrentChat();
+      }, 1000);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [messages]);
-
-  // Save chats to localStorage
-  useEffect(() => {
-    if (savedChats.length > 0) {
-      storeInLocalStorage(STORAGE_KEYS.SAVED_CHATS, savedChats);
-    }
-  }, [savedChats]);
+  }, [messages, isAuthenticated, currentChatId]);
 
   // Scroll to bottom for new messages
   useEffect(() => {
@@ -375,33 +408,53 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
   };
 
   // Save current chat
-  const saveCurrentChat = () => {
-    if (messages.length <= 1 || !currentChatId) return;
+  const saveCurrentChat = async () => {
+    if (messages.length <= 1 || !currentChatId || !isAuthenticated) return;
 
-    const existingChatIndex = savedChats.findIndex(chat => chat.id === currentChatId);
-    const chatTitle = getChatTitle(messages);
-
-    if (existingChatIndex >= 0) {
-      // Update existing chat
-      const updatedChats = [...savedChats];
-      updatedChats[existingChatIndex] = {
-        ...updatedChats[existingChatIndex],
+    try {
+      const chatTitle = getChatTitle(messages);
+      const existingChatIndex = savedChats.findIndex(chat => chat.id === currentChatId);
+      
+      const chatData = {
         title: chatTitle,
-        messages: [...messages],
-        lastUpdated: new Date()
+        messages: messages
       };
-      setSavedChats(updatedChats);
-    } else {
-      // Add new chat
-      setSavedChats(prev => [
-        ...prev,
-        {
-          id: currentChatId,
+
+      if (existingChatIndex >= 0) {
+        // Update existing chat in database
+        await chatAPI.update(currentChatId, chatData);
+        
+        // Update local state
+        const updatedChats = [...savedChats];
+        updatedChats[existingChatIndex] = {
+          ...updatedChats[existingChatIndex],
           title: chatTitle,
           messages: [...messages],
           lastUpdated: new Date()
-        }
-      ]);
+        };
+        setSavedChats(updatedChats);
+      } else {
+        // Create new chat in database
+        const newChat = await chatAPI.create(chatData);
+        
+        // Add to local state
+        setSavedChats(prev => [
+          ...prev,
+          {
+            id: newChat.id,
+            title: newChat.title,
+            messages: JSON.parse(newChat.messages),
+            lastUpdated: new Date(newChat.updatedAt)
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to save chat:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save chat to database.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -446,36 +499,68 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
   };
 
   // Delete saved chat
-  const deleteSavedChat = (chatId: string, e: React.MouseEvent) => {
+  const deleteSavedChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
 
-    const updatedChats = savedChats.filter(chat => chat.id !== chatId);
-    setSavedChats(updatedChats);
+    if (!isAuthenticated) return;
 
-    // Start new chat if deleting current chat
-    if (chatId === currentChatId) {
-      handleStartNewChat();
+    try {
+      // Delete from database
+      await chatAPI.delete(chatId);
+      
+      // Update local state
+      const updatedChats = savedChats.filter(chat => chat.id !== chatId);
+      setSavedChats(updatedChats);
+
+      // Start new chat if deleting current chat
+      if (chatId === currentChatId) {
+        handleStartNewChat();
+      }
+
+      toast({
+        title: "Chat Deleted",
+        description: "The chat has been removed from your history.",
+      });
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete chat from database.",
+        variant: "destructive"
+      });
     }
-
-    toast({
-      title: "Chat Deleted",
-      description: "The chat has been removed from your history.",
-    });
   };
 
   // Rename saved chat
-  const renameSavedChat = (chatId: string, newTitle: string) => {
-    const updatedChats = savedChats.map(chat => 
-      chat.id === chatId 
-        ? { ...chat, title: newTitle.trim() || "Untitled Chat", lastUpdated: new Date() }
-        : chat
-    );
-    setSavedChats(updatedChats);
+  const renameSavedChat = async (chatId: string, newTitle: string) => {
+    if (!isAuthenticated) return;
 
-    toast({
-      title: "Chat Renamed",
-      description: "The chat title has been updated.",
-    });
+    try {
+      const title = newTitle.trim() || "Untitled Chat";
+      
+      // Update in database
+      await chatAPI.update(chatId, { title });
+      
+      // Update local state
+      const updatedChats = savedChats.map(chat => 
+        chat.id === chatId 
+          ? { ...chat, title, lastUpdated: new Date() }
+          : chat
+      );
+      setSavedChats(updatedChats);
+
+      toast({
+        title: "Chat Renamed",
+        description: "The chat title has been updated.",
+      });
+    } catch (error) {
+      console.error('Failed to rename chat:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update chat title in database.",
+        variant: "destructive"
+      });
+    }
   };
 
   // Helper function to enhance system messages with personality guidance
@@ -864,9 +949,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
                     localStorage.setItem(STORAGE_KEYS.CURRENT_CHAT_ID, newChatId);
                   }
 
-                  // Save updated messages
-                  storeInLocalStorage(STORAGE_KEYS.MESSAGES, [...messages, finalMessage]);
-
                   // Update saved chats
                   if (currentChatId) {
                     saveCurrentChat();
@@ -922,10 +1004,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
 
     // Reset chat ID
     setCurrentChatId(null);
-
-    // Clear localStorage data related to current chat
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_CHAT_ID);
-    localStorage.removeItem(STORAGE_KEYS.MESSAGES);
 
     // Clear any active custom bot data
     sessionStorage.removeItem('activeCustomBot');
@@ -1078,19 +1156,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
           : msg
       )
     );
-    // Save updated messages
-    setTimeout(() => {
-      try {
-        storeInLocalStorage(STORAGE_KEYS.MESSAGES, messages);
-
-        // Update saved chats
-        if (currentChatId) {
-          saveCurrentChat();
-        }
-      } catch (err) {
-        console.error("Error in updateMessageWithImage timeout handler:", err);
-      }
-    }, 100);
+    // Auto-save will handle saving the updated messages
   };
 
   // Context value
@@ -1103,6 +1169,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
     setCurrentChatId,
     savedChats,
     setSavedChats,
+    isLoading,
     addWelcomeMessage,
     handleSendMessage,
     updateMessageWithImage,
@@ -1115,6 +1182,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
     messagesEndRef,
     messagesContainerRef,
     regenerateMessage,
+    refreshChats,
   };
 
   return (

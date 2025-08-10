@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { projectsAPI, migrationAPI } from '../services/database';
+import { useAuth } from './AuthContext';
+import { useToast } from '../hooks/use-toast';
 
 // Define Project type
 export interface Project {
@@ -14,10 +17,12 @@ export interface Project {
 // Define context type
 interface ProjectsContextType {
   projects: Project[];
-  addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>) => void;
-  deleteProject: (id: string) => void;
+  isLoading: boolean;
+  addProject: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string | undefined>;
+  updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
   getProject: (id: string) => Project | undefined;
+  refreshProjects: () => Promise<void>;
 }
 
 // Create context
@@ -29,58 +34,156 @@ const STORAGE_KEY = 'localGrok_projects';
 // Provider component
 export const ProjectsProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
 
-  // Load saved projects on init
+  // Load projects from database when authenticated
   useEffect(() => {
-    const savedProjects = localStorage.getItem(STORAGE_KEY);
-    if (savedProjects) {
-      try {
-        setProjects(JSON.parse(savedProjects));
-      } catch (error) {
-        console.error('Failed to parse saved projects:', error);
-        // Initialize with empty array on error
-        setProjects([]);
-      }
+    if (isAuthenticated) {
+      loadProjects();
     }
-  }, []);
+  }, [isAuthenticated]);
 
-  // Save projects to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-  }, [projects]);
+  const loadProjects = async () => {
+    try {
+      setIsLoading(true);
+      const fetchedProjects = await projectsAPI.getAll();
+      setProjects(fetchedProjects);
+      
+      // Check if we need to migrate from localStorage
+      const localProjects = localStorage.getItem(STORAGE_KEY);
+      if (localProjects && fetchedProjects.length === 0) {
+        await migrateFromLocalStorage();
+      }
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load projects from database.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const migrateFromLocalStorage = async () => {
+    try {
+      const migratedProjects = await migrationAPI.migrateProjects();
+      if (migratedProjects.length > 0) {
+        setProjects(migratedProjects);
+        toast({
+          title: 'Migration Complete',
+          description: `Successfully migrated ${migratedProjects.length} projects to database.`,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to migrate projects:', error);
+      toast({
+        title: 'Migration Failed',
+        description: 'Failed to migrate projects from local storage.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Add a new project
-  const addProject = (projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const now = new Date().toISOString();
-    const newProject: Project = {
-      ...projectData,
-      id: `project_${Date.now()}`,
-      createdAt: now,
-      updatedAt: now,
-    };
-    
-    setProjects(prev => [...prev, newProject]);
-    return newProject.id;
+  const addProject = async (projectData: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (!isAuthenticated) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please log in to create projects.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const newProject = await projectsAPI.create(projectData);
+      setProjects(prev => [...prev, newProject]);
+      toast({
+        title: 'Project Created',
+        description: `Project "${newProject.name}" has been created successfully.`,
+      });
+      return newProject.id;
+    } catch (error) {
+      console.error('Failed to create project:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create project.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Update an existing project
-  const updateProject = (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>) => {
-    setProjects(prev => 
-      prev.map(project => 
-        project.id === id 
-          ? { 
-              ...project, 
-              ...updates, 
-              updatedAt: new Date().toISOString() 
-            }
-          : project
-      )
-    );
+  const updateProject = async (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt' | 'updatedAt'>>) => {
+    if (!isAuthenticated) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please log in to update projects.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const updatedProject = await projectsAPI.update(id, updates);
+      setProjects(prev => 
+        prev.map(project => 
+          project.id === id ? updatedProject : project
+        )
+      );
+      toast({
+        title: 'Project Updated',
+        description: 'Project has been updated successfully.',
+      });
+    } catch (error) {
+      console.error('Failed to update project:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update project.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Delete a project
-  const deleteProject = (id: string) => {
-    setProjects(prev => prev.filter(project => project.id !== id));
+  const deleteProject = async (id: string) => {
+    if (!isAuthenticated) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please log in to delete projects.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await projectsAPI.delete(id);
+      setProjects(prev => prev.filter(project => project.id !== id));
+      toast({
+        title: 'Project Deleted',
+        description: 'Project has been deleted successfully.',
+      });
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete project.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Get a project by ID
@@ -91,10 +194,12 @@ export const ProjectsProvider: React.FC<{children: React.ReactNode}> = ({ childr
   // Context value
   const value: ProjectsContextType = {
     projects,
+    isLoading,
     addProject,
     updateProject,
     deleteProject,
-    getProject
+    getProject,
+    refreshProjects: loadProjects
   };
 
   return (
@@ -111,4 +216,4 @@ export const useProjects = (): ProjectsContextType => {
     throw new Error('useProjects must be used within a ProjectsProvider');
   }
   return context;
-}; 
+};
