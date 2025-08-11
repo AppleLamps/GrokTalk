@@ -1,9 +1,9 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { getUserFromAuthHeader } from '../src/lib/supabaseServer';
+import { getSupabaseAdmin, getUserFromAuthHeader } from '../src/lib/supabaseServer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(200).end();
-
+  
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -15,12 +15,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Return session information
+    const supabase = getSupabaseAdmin();
+    
+    // Get user data from your custom users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, username, email, created_at')
+      .eq('email', authUser.email)
+      .single();
+
+    if (userError || !userData) {
+      return res.status(404).json({ error: 'User not found in database' });
+    }
+
     return res.json({
       user: {
-        id: authUser.id,
-        email: authUser.email,
-        name: authUser.user_metadata?.name || authUser.email
+        id: userData.id,
+        email: userData.email,
+        name: userData.username,
+        created_at: userData.created_at
       },
       authenticated: true
     });
