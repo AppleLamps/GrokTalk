@@ -51,6 +51,10 @@
       "dest": "/api/auth/profile.ts"
     },
     {
+      "src": "/api/auth$",
+      "dest": "/api/auth.ts"
+    },
+    {
       "src": "/api/projects",
       "dest": "/api/projects/index.ts"
     },
@@ -69,6 +73,14 @@
     {
       "src": "/api/api-keys/(?<id>[^/]+)$",
       "dest": "/api/api-keys/[id].ts"
+    },
+    {
+      "src": "/api/session",
+      "dest": "/api/session.ts"
+    },
+    {
+      "src": "/api/user-settings",
+      "dest": "/api/user-settings.ts"
     },
     {
       "src": "/(.*)",
